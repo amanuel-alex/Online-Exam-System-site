@@ -5,6 +5,7 @@ import {
   Body,
   Param,
   UseGuards,
+  Patch,
 } from '@nestjs/common';
 import { GradingService } from './grading.service';
 import { GradeManualAnswerDto } from './dto/grade-manual-answer.dto';
@@ -37,6 +38,13 @@ export class GradingController {
     @CurrentUser() currentUser: any,
   ) {
     return this.gradingService.manualGrade(attemptId, dto, currentUser);
+  }
+
+  @Patch('release/:attemptId')
+  @Roles(Role.SYSTEM_ADMIN, Role.ORG_ADMIN, Role.TEACHER, Role.EXAMINER)
+  @Permissions('update:exam')
+  releaseResult(@Param('attemptId') attemptId: string, @CurrentUser() currentUser: any) {
+    return this.gradingService.releaseResult(attemptId, currentUser);
   }
 
   @Get('result/:attemptId')

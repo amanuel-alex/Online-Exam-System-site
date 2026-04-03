@@ -41,23 +41,37 @@ export class GradingService {
 
     for (const answer of attempt.answers) {
       const eq = attempt.exam.examQuestions.find(i => i.questionId === answer.questionId);
-      if (!eq) continue; // Should not happen in data integrity
+      if (!eq) continue;
 
       const q = eq.question;
       const points = eq.pointsOverride ?? q.points;
 
       if (q.type === QuestionType.MCQ || q.type === QuestionType.TRUE_FALSE) {
-        // Find correct option
-        const correctOptionId = q.options.find(o => o.isCorrect)?.id;
-        const isCorrect = answer.optionId === correctOptionId;
+        const correctOptions = q.options.filter(o => o.isCorrect).map(o => o.id);
+        const studentSelections = answer.selectedOptions || (answer.optionId ? [answer.optionId] : []);
+
+        let awardedPoints = 0;
+
+        if (correctOptions.length === 1) {
+          // Standard single-correct MCQ or TRUE_FALSE
+          const isCorrect = studentSelections.includes(correctOptions[0]);
+          awardedPoints = isCorrect ? points : 0;
+        } else if (correctOptions.length > 1) {
+          // Multiple correct MCQ: Partial scoring support
+          // Logic: (CorrectSelections - IncorrectSelections) / TotalCorrect
+          const correctSelections = studentSelections.filter(s => correctOptions.includes(s));
+          const incorrectSelections = studentSelections.filter(s => !correctOptions.includes(s));
+          
+          awardedPoints = Math.max(0, (correctSelections.length - incorrectSelections.length) / correctOptions.length) * points;
+        }
 
         gradingWork.push(
           this.prisma.attemptAnswer.update({
             where: { id: answer.id },
             data: {
-              score: isCorrect ? points : 0,
+              score: awardedPoints,
               isAutoGraded: true,
-              evalComment: isCorrect ? 'Auto-graded: Correct' : 'Auto-graded: Incorrect',
+              evalComment: `Auto-graded. Correct: ${correctOptions.length}. Selected: ${studentSelections.length}.`,
             },
           })
         );
@@ -66,7 +80,6 @@ export class GradingService {
 
     await Promise.all(gradingWork);
 
-    // After auto-grading, check if we can finalize the overall Result
     return this.finalizeResultIfComplete(attemptId);
   }
 
@@ -78,13 +91,8 @@ export class GradingService {
     this.assertCanGrade(currentUser);
 
     const answer = await this.prisma.attemptAnswer.findUnique({
-      where: {
-        attemptId_questionId: {
-          attemptId,
-          questionId: dto.questionId,
-        },
-      },
-      include: { attempt: { include: { exam: true } } },
+      where: { attemptId_questionId: { attemptId, questionId: dto.questionId } },
+      include: { attempt: { include: { exam: true } } }
     });
 
     if (!answer) throw new NotFoundException('Answer record not found.');
@@ -96,7 +104,7 @@ export class GradingService {
     });
 
     const maxPoints = eq.pointsOverride ?? eq.question.points;
-    if (dto.score > maxPoints) throw new BadRequestException(`Score cannot exceed max points of ${maxPoints}.`);
+    if (dto.score > maxPoints) throw new BadRequestException(`Score of ${dto.score} exceeds max points of ${maxPoints}.`);
 
     await this.prisma.attemptAnswer.update({
       where: { id: answer.id },
@@ -112,7 +120,28 @@ export class GradingService {
   }
 
   // ─────────────────────────────────────────────
-  // RECALCULATE / FINALIZE RESULT
+  // RELEASE RESULTS
+  // ─────────────────────────────────────────────
+
+  async releaseResult(attemptId: string, currentUser: any) {
+    this.assertCanGrade(currentUser); // only teachers/admins can release grades
+
+    const result = await this.prisma.result.findUnique({
+      where: { attemptId },
+      include: { attempt: { include: { exam: true } } },
+    });
+
+    if (!result) throw new NotFoundException('Result has not been calculated yet.');
+    this.assertOrgAccess(result.attempt.exam.organizationId, currentUser);
+
+    return this.prisma.result.update({
+      where: { attemptId },
+      data: { isReleased: true, releasedAt: new Date() },
+    });
+  }
+
+  // ─────────────────────────────────────────────
+  // FINALIZE & CALCULATE
   // ─────────────────────────────────────────────
 
   async finalizeResultIfComplete(attemptId: string) {
@@ -124,37 +153,13 @@ export class GradingService {
       },
     });
 
-    if (!attempt) throw new NotFoundException('Attempt not found.');
+    if (!attempt) throw new NotFoundException('Attempt session not found.');
 
-    // Check if ALL answers are graded (score is not null)
-    // NOTE: If an exam has 10 questions but student only answered 5, 
-    // the other 5 don't have records in 'answers' if auto-save wasn't triggered?
-    // We must count based on 'examQuestions' count.
-    
-    if (attempt.answers.length < attempt.exam.examQuestions.length) {
-      // Create missing answer records with 0 score (unanswered)
-      const missing = attempt.exam.examQuestions.filter(eq => !attempt.answers.some(a => a.questionId === eq.questionId));
-      await this.prisma.attemptAnswer.createMany({
-        data: missing.map(m => ({
-          attemptId,
-          questionId: m.questionId,
-          score: 0,
-          isAutoGraded: true,
-          evalComment: 'Unanswered'
-        }))
-      });
-    }
-
-    const allGradedAttempt = await this.prisma.examAttempt.findUnique({
-      where: { id: attemptId },
-      include: { answers: true, exam: { include: { examQuestions: { include: { question: true } } } } }
-    });
-
-    const totalEarned = allGradedAttempt.answers.reduce((sum, a) => sum + (a.score ?? 0), 0);
-    const totalMax = allGradedAttempt.exam.examQuestions.reduce((sum, eq) => sum + (eq.pointsOverride ?? eq.question.points), 0);
+    const totalEarned = attempt.answers.reduce((sum, a) => sum + (a.score ?? 0), 0);
+    const totalMax = attempt.exam.examQuestions.reduce((sum, eq) => sum + (eq.pointsOverride ?? eq.question.points), 0);
     
     const percentage = (totalEarned / (totalMax || 1)) * 100;
-    const isPassed = percentage >= allGradedAttempt.exam.passPercentage;
+    const isPassed = percentage >= attempt.exam.passPercentage;
 
     const result = await this.prisma.result.upsert({
       where: { attemptId },
@@ -166,7 +171,7 @@ export class GradingService {
       },
       create: {
         attemptId,
-        studentId: allGradedAttempt.studentId,
+        studentId: attempt.studentId,
         totalScore: totalEarned,
         maxScore: totalMax,
         percentage,
@@ -174,16 +179,18 @@ export class GradingService {
       },
     });
 
-    // Mark attempt as GRADED if everything is done
-    const pendingManual = allGradedAttempt.answers.some(a => a.score === null);
-    if (!pendingManual && allGradedAttempt.status === AttemptStatus.SUBMITTED) {
+    // Check if every single question has a score.
+    const questionsNeeded = attempt.exam.examQuestions.length;
+    const questionsGraded = attempt.answers.filter(a => a.score !== null).length;
+
+    if (questionsGraded === questionsNeeded && attempt.status === AttemptStatus.SUBMITTED) {
       await this.prisma.examAttempt.update({
         where: { id: attemptId },
         data: { status: AttemptStatus.GRADED },
       });
     }
 
-    return { result, isFullyGraded: !pendingManual };
+    return { result, isFullyGraded: questionsGraded === questionsNeeded };
   }
 
   // ─────────────────────────────────────────────
@@ -192,12 +199,12 @@ export class GradingService {
 
   private assertCanGrade(currentUser: any) {
     const roles: Role[] = [Role.SYSTEM_ADMIN, Role.ORG_ADMIN, Role.TEACHER, Role.EXAMINER];
-    if (!roles.includes(currentUser.role)) throw new ForbiddenException('Grading denied.');
+    if (!roles.includes(currentUser.role)) throw new ForbiddenException('Grading permission denied.');
   }
 
   private assertOrgAccess(orgId: string, currentUser: any) {
     if (currentUser.role !== Role.SYSTEM_ADMIN && currentUser.organizationId !== orgId) {
-      throw new ForbiddenException('Organization mismatch.');
+      throw new ForbiddenException('Access to restricted organization grading is forbidden.');
     }
   }
 }

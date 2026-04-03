@@ -213,10 +213,11 @@ model AttemptAnswer {
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   
   // Polymorphic-like storage based on question type
-  textAnswer String?  @db.Text // Used for ESSAY
-  optionId   String?           // Used for MCQ / TRUE_FALSE
-  option     Option?  @relation(fields: [optionId], references: [id])
-  fileUrl    String?           // Used for FILE_UPLOAD
+  textAnswer      String?  @db.Text // Used for ESSAY
+  selectedOptions String[]           // Used for MCQ (support multiple selection)
+  optionId        String?           // Deprecated legacy field (keeping for compatibility)
+  option          Option?  @relation(fields: [optionId], references: [id])
+  fileUrl         String?           // Used for FILE_UPLOAD
   
   // Grading & Evaluation
   isAutoGraded Boolean  @default(false)
@@ -244,6 +245,8 @@ model Result {
   maxScore   Float
   percentage Float    // Stored physically for ultra-fast dashboard queries
   isPassed   Boolean
+  isReleased Boolean  @default(false)
+  releasedAt DateTime?
   
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
