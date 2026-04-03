@@ -85,8 +85,8 @@ model User {
 
   createdExams     Exam[]        @relation("ExamCreator")
   createdQuestions Question[]    @relation("QuestionCreator")
-  attempts         Attempt[]     @relation("StudentAttempts")
-  gradedAnswers    Answer[]      @relation("AnswerGrader")
+  attempts         ExamAttempt[] @relation("StudentAttempts")
+  gradedAnswers    AttemptAnswer[] @relation("AnswerGrader")
   results          Result[]
 
   @@index([email])
@@ -115,7 +115,7 @@ model Question {
 
   options       Option[]
   examQuestions ExamQuestion[]
-  answers       Answer[]
+  answers       AttemptAnswer[]
 
   @@index([organizationId])
   @@index([type])
@@ -135,7 +135,7 @@ model Option {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  answers Answer[] // To track if a student selected this option
+  answers AttemptAnswer[] // To track if a student selected this option
 
   @@index([questionId])
 }
@@ -162,7 +162,7 @@ model Exam {
   updatedAt          DateTime     @updatedAt
 
   examQuestions ExamQuestion[]
-  attempts      Attempt[]
+  attempts      ExamAttempt[]
 
   @@index([organizationId])
   @@index([isPublished])
@@ -181,7 +181,7 @@ model ExamQuestion {
   @@index([examId])
 }
 
-model Attempt {
+model ExamAttempt {
   id            String        @id @default(uuid())
   examId        String
   exam          Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
@@ -196,7 +196,7 @@ model Attempt {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  answers Answer[]
+  answers AttemptAnswer[]
   result  Result?
 
   @@unique([examId, studentId, attemptNumber]) // Prevent duplicate attempt numbers
@@ -205,10 +205,10 @@ model Attempt {
   @@index([status])
 }
 
-model Answer {
+model AttemptAnswer {
   id         String   @id @default(uuid())
   attemptId  String
-  attempt    Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  attempt    ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   questionId String
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
   
@@ -234,9 +234,9 @@ model Answer {
 }
 
 model Result {
-  id         String   @id @default(uuid())
-  attemptId  String   @unique
-  attempt    Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  id         String      @id @default(uuid())
+  attemptId  String      @unique
+  attempt    ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   studentId  String
   student    User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
   
