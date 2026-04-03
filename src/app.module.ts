@@ -7,7 +7,7 @@ import { UsersModule } from './modules/users/users.module';
 import { OrganizationModule } from './modules/organization/organization.module';
 import { QuestionBankModule } from './modules/question-bank/question-bank.module';
 import { ExamModule } from './modules/exam/exam.module';
-import { AttemptModule } from './modules/attempts/attempts.module';
+import { ExamAttemptModule } from './modules/exam-attempt/exam-attempt.module';
 
 @Module({
   imports: [
@@ -17,7 +17,7 @@ import { AttemptModule } from './modules/attempts/attempts.module';
     OrganizationModule,
     QuestionBankModule,
     ExamModule,
-    AttemptModule,
+    ExamAttemptModule,
   ],
   controllers: [AppController],
   providers: [AppService],
