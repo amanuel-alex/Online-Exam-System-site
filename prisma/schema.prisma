@@ -68,6 +68,7 @@ model Organization {
   metadata  Json?    // Arbitrary extra data
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  deletedAt DateTime?
 
   users     User[]
   exams     Exam[]
@@ -76,6 +77,7 @@ model Organization {
 
   @@index([slug])
   @@index([isActive])
+  @@index([deletedAt])
 }
 
 model User {
@@ -90,6 +92,7 @@ model User {
   isActive       Boolean       @default(true)
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
 
   createdExams     Exam[]        @relation("ExamCreator")
   createdQuestions Question[]    @relation("QuestionCreator")
@@ -102,6 +105,7 @@ model User {
   @@index([email])
   @@index([organizationId])
   @@index([role])
+  @@index([deletedAt])
 }
 
 model Question {
@@ -120,6 +124,7 @@ model Question {
   currentVersionId String?          @unique
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
 
   versions      QuestionVersion[]
   examQuestions ExamQuestion[]
@@ -128,6 +133,7 @@ model Question {
   @@index([organizationId])
   @@index([subject])
   @@index([isArchived])
+  @@index([deletedAt])
 }
 
 model QuestionVersion {
@@ -198,6 +204,7 @@ model Exam {
   
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+  deletedAt          DateTime?
 
   examQuestions ExamQuestion[]
   sessions      ExamSession[]
@@ -205,6 +212,7 @@ model Exam {
 
   @@index([organizationId])
   @@index([isPublished])
+  @@index([deletedAt])
 }
 
 model ExamQuestion {
@@ -237,8 +245,12 @@ model ExamAttempt {
   endTime       DateTime?
   status        AttemptStatus @default(IN_PROGRESS)
   
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
 
   answers AttemptAnswer[]
   result  Result?
@@ -246,7 +258,9 @@ model ExamAttempt {
   @@unique([examId, studentId, attemptNumber]) // Prevent duplicate attempt numbers
   @@index([examId])
   @@index([studentId])
+  @@index([organizationId])
   @@index([status])
+  @@index([deletedAt])
 }
 
 model AttemptAnswer {
@@ -274,10 +288,12 @@ model AttemptAnswer {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  deletedAt DateTime?
 
   @@unique([attemptId, questionId]) // A student has one definitive answer per question per attempt
   @@index([attemptId])
   @@index([questionId])
+  @@index([deletedAt])
 }
 
 model Result {
@@ -296,10 +312,16 @@ model Result {
   
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
   @@index([studentId])
   @@index([attemptId])
+  @@index([organizationId])
   @@index([isPassed])
+  @@index([deletedAt])
 }
 
 model ExamSession {
@@ -320,6 +342,7 @@ model ExamSession {
 
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
 
   sessionUsers   ExamSessionUser[]
   attempts       ExamAttempt[]
@@ -327,6 +350,7 @@ model ExamSession {
   @@index([examId])
   @@index([organizationId])
   @@index([status])
+  @@index([deletedAt])
 }
 
 model ExamSessionUser {
@@ -368,9 +392,16 @@ model Notification {
   metadata  Json?    // Optional: { examId: "...", sessionId: "..." }
   
   isRead    Boolean  @default(false)
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
   createdAt DateTime @default(now())
+  deletedAt DateTime?
 
   @@index([userId])
+  @@index([organizationId])
   @@index([isRead])
   @@index([createdAt])
+  @@index([deletedAt])
 }
