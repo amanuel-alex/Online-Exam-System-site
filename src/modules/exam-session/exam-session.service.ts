@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateExamSessionDto } from './dto/create-session.dto';
-import { AssignUserToSessionDto } from './assign-user.dto';
-import { Prisma, Role, SessionStatus } from '@prisma/client';
+import { AssignUserToSessionDto } from './dto/assign-user.dto';
+import { Prisma, Role, SessionStatus, AttemptStatus } from '@prisma/client';
 
 @Injectable()
 export class ExamSessionService {
@@ -19,22 +19,15 @@ export class ExamSessionService {
 
   async create(dto: CreateExamSessionDto, currentUser: any) {
     this.assertCanManageSessions(currentUser);
-
     const organizationId = this.resolveOrganizationId(dto.organizationId, currentUser);
 
     if (dto.startTime >= dto.endTime) {
-      throw new BadRequestException('Session start time must be before end time.');
+      throw new BadRequestException('Session start must be before end.');
     }
 
-    // Ensure Exam exists and belongs to the same org
-    const exam = await this.prisma.exam.findUnique({
-      where: { id: dto.examId },
-    });
-
+    const exam = await this.prisma.exam.findUnique({ where: { id: dto.examId } });
     if (!exam) throw new NotFoundException('Exam not found.');
-    if (exam.organizationId !== organizationId) {
-      throw new ForbiddenException('Exam belongs to another organization.');
-    }
+    if (exam.organizationId !== organizationId) throw new ForbiddenException('Exam belongs to another org.');
 
     return this.prisma.examSession.create({
       data: {
@@ -51,6 +44,36 @@ export class ExamSessionService {
   }
 
   // ─────────────────────────────────────────────
+  // MONITORING (REAL-TIME STATUS)
+  // ─────────────────────────────────────────────
+
+  async monitorSession(sessionId: string, currentUser: any) {
+    const session = await this.findOne(sessionId, currentUser);
+    this.assertCanManageSessions(currentUser);
+
+    const stats = await this.prisma.examAttempt.groupBy({
+      by: ['status'],
+      where: { sessionId },
+      _count: true,
+    });
+
+    const activeCount = stats.find((s) => s.status === AttemptStatus.IN_PROGRESS)?._count ?? 0;
+    const submittedCount = (stats.find((s) => s.status === AttemptStatus.SUBMITTED)?._count ?? 0) +
+                           (stats.find((s) => s.status === AttemptStatus.GRADED)?._count ?? 0);
+
+    const totalAssigned = await this.prisma.examSessionUser.count({ where: { sessionId } });
+
+    return {
+      sessionTitle: session.title,
+      totalAssigned,
+      activeInProgress: activeCount,
+      completed: submittedCount,
+      notStarted: Math.max(0, totalAssigned - activeCount - submittedCount),
+      status: session.status,
+    };
+  }
+
+  // ─────────────────────────────────────────────
   // ASSIGN USERS (PRIVATE SESSION)
   // ─────────────────────────────────────────────
 
@@ -58,18 +81,10 @@ export class ExamSessionService {
     const session = await this.findOne(sessionId, currentUser);
     this.assertCanManageSessions(currentUser);
 
-    // Atomic update of session users
     await this.prisma.$transaction(async (tx) => {
-      // 1. Delete existing (Optional - depend on strategy)
-      // For now, we'll just add new ones or full overwrite
-      await tx.sessionUser.deleteMany({ where: { sessionId } });
-
-      // 2. Create new assignments
-      return tx.sessionUser.createMany({
-        data: dto.userIds.map((userId) => ({
-          sessionId,
-          userId,
-        })),
+      await tx.examSessionUser.deleteMany({ where: { sessionId } });
+      return tx.examSessionUser.createMany({
+        data: dto.userIds.map((uid) => ({ sessionId, userId: uid })),
       });
     });
 
@@ -82,14 +97,12 @@ export class ExamSessionService {
 
   async findAll(query: any, currentUser: any) {
     const organizationId = this.resolveOrganizationId(query.organizationId, currentUser);
-
     const where: Prisma.ExamSessionWhereInput = {
       organizationId,
       ...(query.status && { status: query.status }),
       ...(query.examId && { examId: query.examId }),
     };
 
-    // If student, only show public or assigned sessions
     if (currentUser.role === Role.STUDENT) {
       where.OR = [
         { isPublic: true },
@@ -122,29 +135,22 @@ export class ExamSessionService {
     return session;
   }
 
-  // ─────────────────────────────────────────────
-  // ACCESS VALIDATION (FOR STARTING EXAM)
-  // ─────────────────────────────────────────────
-
   async validateSessionAccess(sessionId: string, currentUser: any) {
     const session = await this.findOne(sessionId, currentUser);
 
-    // 1. Check time window
     const now = new Date();
-    if (now < session.startTime) throw new ForbiddenException('Exam session has not started yet.');
-    if (now > session.endTime) throw new ForbiddenException('Exam session has closed.');
+    if (now < session.startTime) throw new ForbiddenException('Session window not open yet.');
+    if (now > session.endTime) throw new ForbiddenException('Session has expired.');
 
-    // 2. Check if user is eligible
     if (!session.isPublic) {
       const isAssigned = session.sessionUsers.some((su) => su.userId === currentUser.id);
       if (!isAssigned && currentUser.role === Role.STUDENT) {
-        throw new ForbiddenException('You are not assigned to this private exam session.');
+        throw new ForbiddenException('Unauthorized for this private session.');
       }
     }
 
-    // 3. Check session status
-    if (session.status !== SessionStatus.ACTIVE && session.status !== SessionStatus.SCHEDULED) {
-      throw new ForbiddenException('Exam session is not in active state.');
+    if (session.status === SessionStatus.CANCELLED || session.status === SessionStatus.COMPLETED) {
+      throw new ForbiddenException('This session is no longer active.');
     }
 
     return session;

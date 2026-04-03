@@ -97,7 +97,7 @@ model User {
   gradedAnswers    AttemptAnswer[] @relation("AnswerGrader")
   results          Result[]
   sessionsCreated  ExamSession[]
-  sessionEnrols    SessionUser[]
+  sessionEnrols    ExamSessionUser[]
 
   @@index([email])
   @@index([organizationId])
@@ -289,7 +289,7 @@ model ExamSession {
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
-  sessionUsers   SessionUser[]
+  sessionUsers   ExamSessionUser[]
   attempts       ExamAttempt[]
 
   @@index([examId])
@@ -297,7 +297,7 @@ model ExamSession {
   @@index([status])
 }
 
-model SessionUser {
+model ExamSessionUser {
   id        String      @id @default(uuid())
   sessionId String
   session   ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)

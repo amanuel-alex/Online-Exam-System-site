@@ -19,7 +19,7 @@ import { MultiTenantGuard } from '../../common/guards/multi-tenant.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { Role, SessionStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 @Controller('exam-sessions')
 @UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard, MultiTenantGuard)
@@ -45,6 +45,13 @@ export class ExamSessionController {
   @Permissions('read:exam')
   findOne(@Param('id') id: string, @CurrentUser() currentUser: any) {
     return this.sessionService.findOne(id, currentUser);
+  }
+
+  @Get(':id/monitor')
+  @Roles(Role.SYSTEM_ADMIN, Role.ORG_ADMIN, Role.TEACHER, Role.EXAMINER)
+  @Permissions('read:exam')
+  monitor(@Param('id') id: string, @CurrentUser() currentUser: any) {
+    return this.sessionService.monitorSession(id, currentUser);
   }
 
   @Post(':id/assign')
