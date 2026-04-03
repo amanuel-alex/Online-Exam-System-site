@@ -122,6 +122,7 @@ model User {
   attempts         ExamAttempt[] @relation("StudentAttempts")
   gradedAnswers    AttemptAnswer[] @relation("AnswerGrader")
   results          Result[]
+  certificates     Certificate[] @relation("UserCertificates")
   sessionsCreated  ExamSession[]
   sessionEnrols    ExamSessionUser[]
 
@@ -232,6 +233,7 @@ model Exam {
   examQuestions ExamQuestion[]
   sessions      ExamSession[]
   attempts      ExamAttempt[]
+  certificates  Certificate[]
 
   @@index([organizationId])
   @@index([isPublished])
@@ -337,6 +339,8 @@ model Result {
   isLocked   Boolean  @default(false) // Prevents any further edits once finalized
   verificationHash String?         // Cryptographic hash of (studentId + totalScore + attemptId)
 
+  certificate  Certificate?
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   deletedAt  DateTime?
@@ -441,6 +445,32 @@ model UserIdentity {
   @@index([organizationId])
   @@index([idNumber])
   @@index([status])
+}
+
+model Certificate {
+  id             String   @id @default(uuid())
+  uniqueId       String   @unique // Publicly visible ID (e.g., EX-2024-XXXX)
+  
+  resultId       String   @unique
+  result         Result   @relation(fields: [resultId], references: [id])
+  
+  userId         String
+  user           User     @relation("UserCertificates", fields: [userId], references: [id])
+  
+  examId         String
+  exam           Exam     @relation(fields: [examId], references: [id])
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  issuedAt       DateTime @default(now())
+  
+  verificationHash String  // Anti-forgery cryptographic checksum
+  isRevoked       Boolean  @default(false)
+
+  @@index([uniqueId])
+  @@index([organizationId])
+  @@index([userId])
 }
 
 model Notification {
