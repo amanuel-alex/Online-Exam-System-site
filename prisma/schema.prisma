@@ -88,6 +88,8 @@ model Organization {
   sessions  ExamSession[]
   questions Question[] // Link questions to the organization (question bank)
 
+  webhooks  WebhookConfig[]
+
   @@index([slug])
   @@index([isActive])
   @@index([deletedAt])
@@ -509,4 +511,25 @@ model IdempotencyKey {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+enum WebhookEvent {
+  EXAM_COMPLETED
+  RESULT_PUBLISHED
+  USER_REGISTERED
+}
+
+model WebhookConfig {
+  id             String         @id @default(uuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  url            String         // Destination URL (e.g., Moodle endpoint)
+  secret         String         // Secret key for HMAC signing
+  events         WebhookEvent[] // List of events to subscribe to
+  
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+
+  @@index([organizationId])
 }
