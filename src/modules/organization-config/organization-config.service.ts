@@ -1,25 +1,30 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateOrgConfigDto } from './dto/update-config.dto';
 import { Role } from '@prisma/client';
+import { ExaminaCacheService } from '../../common/cache/cache.service';
 
 @Injectable()
 export class OrganizationConfigService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: ExaminaCacheService,
+  ) {}
 
-  /**
-   * Default platform-wide settings (Fallback)
-   */
   private readonly DEFAULTS = {
     grading: { system: 'PERCENTAGE', defaultPassMark: 50 },
     exams: { maxAttempts: 3, defaultDurationMinutes: 60, requireProctoring: false },
   };
 
   /**
-   * Get merged configuration for an organization
+   * Get merged configuration for an organization (Cached for 1 hour)
    */
   async getConfig(organizationId: string, currentUser: any) {
     this.assertOrgAccess(organizationId, currentUser);
+
+    const cacheKey = `org:${organizationId}:config`;
+    const cached = await this.cache.get<any>(cacheKey);
+    if (cached) return cached;
 
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },
@@ -28,17 +33,19 @@ export class OrganizationConfigService {
 
     if (!org) throw new NotFoundException('Organization not found.');
 
-    // Merge custom settings with platform defaults
     const settings = (org.settings as any) || {};
-
-    return {
+    const config = {
       grading: { ...this.DEFAULTS.grading, ...(settings.grading || {}) },
       exams: { ...this.DEFAULTS.exams, ...(settings.exams || {}) },
     };
+
+    // Cache the result for performance (1 hour)
+    await this.cache.set(cacheKey, config, 3600);
+    return config;
   }
 
   /**
-   * Update configuration for an organization
+   * Update configuration for an organization (Invalidates Cache)
    */
   async updateConfig(organizationId: string, dto: UpdateOrgConfigDto, currentUser: any) {
     this.assertCanManageConfig(currentUser);
@@ -50,17 +57,21 @@ export class OrganizationConfigService {
 
     if (!org) throw new NotFoundException('Organization not found.');
 
-    // Deep merge logic (Partial)
     const existingSettings = (org.settings as any) || {};
     const newSettings = {
       grading: { ...(existingSettings.grading || {}), ...(dto.grading || {}) },
       exams: { ...(existingSettings.exams || {}), ...(dto.exams || {}) },
     };
 
-    return this.prisma.organization.update({
+    const updated = await this.prisma.organization.update({
       where: { id: organizationId },
       data: { settings: newSettings as any },
     });
+
+    // Invalidate the cache to ensure new requests see fresh data
+    await this.cache.del(`org:${organizationId}:config`);
+
+    return updated;
   }
 
   // ─────────────────────────────────────────────
@@ -75,7 +86,7 @@ export class OrganizationConfigService {
 
   private assertOrgAccess(orgId: string, currentUser: any) {
     if (currentUser.role !== Role.SYSTEM_ADMIN && currentUser.organizationId !== orgId) {
-      throw new ForbiddenException('Resource belongs to another organization.');
+      throw new ForbiddenException('Unauthorized organization access.');
     }
   }
 }
