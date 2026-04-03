@@ -273,6 +273,9 @@ model ExamAttempt {
   status        AttemptStatus @default(IN_PROGRESS)
   version       Int           @default(1) // Optimistic Locking field
   
+  riskScore     Float         @default(0.0) // Fairness & Anomaly Detection
+  riskFlags     String[]      // E.g. ["TOO_FAST", "IDENTICAL_ANSWERS"]
+
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
 
@@ -411,6 +414,12 @@ model AuditLog {
   newValue       Json?    // State AFTER the change
   
   metadata       Json?    // Contextual data: { ip: "...", browser: "..." }
+  
+  // Legal Integrity Fields
+  userIp         String?
+  userAgent      String?
+  entryHash      String?  // SHA-256 hash of (action + timestamp + userId + secret)
+  
   timestamp      DateTime @default(now())
 
   @@index([userId])
