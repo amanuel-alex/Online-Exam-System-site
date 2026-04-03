@@ -15,7 +15,7 @@ export class ExamAttemptService {
   constructor(private readonly prisma: PrismaService) {}
 
   // ─────────────────────────────────────────────
-  // START ATTEMPT (Transaction)
+  // START ATTEMPT (Transaction + Idempotency Ready)
   // ─────────────────────────────────────────────
 
   async startAttempt(dto: StartAttemptDto, currentUser: any) {
@@ -41,7 +41,6 @@ export class ExamAttemptService {
     });
     if (pastAttempts >= exam.maxAttempts) throw new ForbiddenException('Limit reached.');
 
-    // Transaction for atomic start + audit log
     return this.prisma.$transaction(async (tx) => {
       const attempt = await tx.examAttempt.create({
         data: {
@@ -51,6 +50,7 @@ export class ExamAttemptService {
           attemptNumber: pastAttempts + 1,
           status: AttemptStatus.IN_PROGRESS,
           startTime: new Date(),
+          version: 1, // Start with version 1
         },
       });
 
@@ -68,43 +68,55 @@ export class ExamAttemptService {
   }
 
   // ─────────────────────────────────────────────
-  // SUBMIT ATTEMPT (CRITICAL TRANSACTION)
+  // SUBMIT ATTEMPT (Optimistic Locking)
   // ─────────────────────────────────────────────
 
   async submitAttempt(attemptId: string, currentUser: any) {
+    // 1. Fetch current record (Head)
     const attempt = await this.getValidatedActiveAttempt(attemptId, currentUser);
 
-    // Atomic Finalize + Audit
-    // Note: Grading usually happens as an async trigger or in the same pipe.
-    // Here we ensure the Submission Status and Timestamp are locked together.
     return this.prisma.$transaction(async (tx) => {
-      const submission = await tx.examAttempt.update({
-        where: { id: attemptId },
+      // 2. Perform Update with Version Check (Optimistic Locking)
+      // This prevents thousands of submissions for the same attempt mapping twice.
+      const result = await tx.examAttempt.updateMany({
+        where: {
+          id: attemptId,
+          version: attempt.version, // Ensure version matches what we knew
+          status: AttemptStatus.IN_PROGRESS, // Extra safety
+        },
         data: {
           status: AttemptStatus.SUBMITTED,
           endTime: new Date(),
+          version: { increment: 1 }, // Advance version
         },
       });
+
+      if (result.count === 0) {
+        // This means another thread/process updated the attempt already
+        throw new ConflictException('Submission conflict detected. Attempt might have already been processed.');
+      }
+
+      const submission = await tx.examAttempt.findUnique({ where: { id: attemptId } });
 
       await tx.auditLog.create({
         data: {
           action: 'EXAM_ATTEMPT_SUBMITTED',
           userId: currentUser.id,
-          organizationId: submission.organizationId,
-          metadata: { attemptId: submission.id, duration: submission.endTime!.getTime() - submission.startTime.getTime() },
+          organizationId: submission!.organizationId,
+          metadata: { attemptId: submission!.id, version: submission!.version },
         },
       });
 
       return {
         message: 'Successfully submitted.',
-        attemptId: submission.id,
-        submittedAt: submission.endTime,
+        attemptId: submission!.id,
+        submittedAt: submission!.endTime,
       };
     });
   }
 
   // ─────────────────────────────────────────────
-  // AUTO-SAVE ANSWER (Idempotent Upsert)
+  // AUTO-SAVE ANSWER (Conflict Avoidance)
   // ─────────────────────────────────────────────
 
   async saveAnswer(attemptId: string, dto: SaveAttemptAnswerDto, currentUser: any) {
@@ -113,27 +125,35 @@ export class ExamAttemptService {
     const valid = await this.prisma.examQuestion.findUnique({
       where: { examId_questionId: { examId: attempt.examId, questionId: dto.questionId } },
     });
-    if (!valid) throw new BadRequestException('Invalid question for this exam.');
+    if (!valid) throw new BadRequestException('Invalid question.');
 
-    // The versionId should ideally be captured from the official ExamQuestion mapping
+    // VersionId is fixed at exam creation time
     const versionId = valid.versionId;
 
-    return this.prisma.attemptAnswer.upsert({
-      where: { attemptId_questionId: { attemptId, questionId: dto.questionId } },
-      update: {
-        textAnswer: dto.textAnswer,
-        selectedOptions: dto.selectedOptions || [],
-        fileUrl: dto.fileUrl,
-        versionId, // Record exactly which version they answered
-      },
-      create: {
-        attemptId,
-        questionId: dto.questionId,
-        versionId,
-        textAnswer: dto.textAnswer,
-        selectedOptions: dto.selectedOptions || [],
-        fileUrl: dto.fileUrl,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      // Atomic increment version on every save helps track mutation flow
+      await tx.examAttempt.update({
+        where: { id: attemptId },
+        data: { version: { increment: 1 } },
+      });
+
+      return tx.attemptAnswer.upsert({
+        where: { attemptId_questionId: { attemptId, questionId: dto.questionId } },
+        update: {
+          textAnswer: dto.textAnswer,
+          selectedOptions: dto.selectedOptions || [],
+          fileUrl: dto.fileUrl,
+          versionId, 
+        },
+        create: {
+          attemptId,
+          questionId: dto.questionId,
+          versionId,
+          textAnswer: dto.textAnswer,
+          selectedOptions: dto.selectedOptions || [],
+          fileUrl: dto.fileUrl,
+        },
+      });
     });
   }
 

@@ -244,6 +244,7 @@ model ExamAttempt {
   startTime     DateTime      @default(now())
   endTime       DateTime?
   status        AttemptStatus @default(IN_PROGRESS)
+  version       Int           @default(1) // Optimistic Locking field
   
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -404,4 +405,17 @@ model Notification {
   @@index([isRead])
   @@index([createdAt])
   @@index([deletedAt])
+}
+
+model IdempotencyKey {
+  key       String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  response  Json?    // Optional: Cache the first response to return to duplicates
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
