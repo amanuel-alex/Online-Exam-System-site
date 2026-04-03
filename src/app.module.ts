@@ -10,6 +10,7 @@ import { ExamModule } from './modules/exam/exam.module';
 import { ExamAttemptModule } from './modules/exam-attempt/exam-attempt.module';
 import { ExamSessionModule } from './modules/exam-session/exam-session.module';
 import { GradingModule } from './modules/grading/grading.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { GradingModule } from './modules/grading/grading.module';
     ExamSessionModule,
     ExamAttemptModule,
     GradingModule,
+    AnalyticsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
