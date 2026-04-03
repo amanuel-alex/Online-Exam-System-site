@@ -8,6 +8,7 @@ import { OrganizationModule } from './modules/organization/organization.module';
 import { QuestionBankModule } from './modules/question-bank/question-bank.module';
 import { ExamModule } from './modules/exam/exam.module';
 import { ExamAttemptModule } from './modules/exam-attempt/exam-attempt.module';
+import { GradingModule } from './modules/grading/grading.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ExamAttemptModule } from './modules/exam-attempt/exam-attempt.module';
     QuestionBankModule,
     ExamModule,
     ExamAttemptModule,
+    GradingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
