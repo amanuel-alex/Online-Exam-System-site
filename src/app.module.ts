@@ -12,6 +12,7 @@ import { ExamSessionModule } from './modules/exam-session/exam-session.module';
 import { GradingModule } from './modules/grading/grading.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
+import { FileModule } from './modules/file/file.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AuditLogModule } from './modules/audit-log/audit-log.module';
     GradingModule,
     AnalyticsModule,
     AuditLogModule,
+    FileModule,
   ],
   controllers: [AppController],
   providers: [AppService],

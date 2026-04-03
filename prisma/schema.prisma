@@ -145,6 +145,7 @@ model QuestionVersion {
   createdBy      User               @relation(fields: [createdById], references: [id])
   createdAt      DateTime           @default(now())
 
+  attachments    String[]           // List of URLs to media/PDFs
   options        Option[]
   examQuestions  ExamQuestion[]
   answers        AttemptAnswer[]
