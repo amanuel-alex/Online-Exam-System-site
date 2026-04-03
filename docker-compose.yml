@@ -5,7 +5,7 @@ services:
     container_name: examina_postgres
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_PASSWORD: 2123
       POSTGRES_DB: examSystem
     restart: always
     ports:

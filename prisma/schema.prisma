@@ -40,6 +40,13 @@ enum AttemptStatus {
   GRADED
 }
 
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  EXPERT
+}
+
 // ------------------------------------------------------
 // Models
 // ------------------------------------------------------
@@ -88,18 +95,23 @@ model User {
 }
 
 model Question {
-  id             String       @id @default(uuid())
+  id             String             @id @default(uuid())
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdById    String
-  createdBy      User         @relation("QuestionCreator", fields: [createdById], references: [id])
+  createdBy      User               @relation("QuestionCreator", fields: [createdById], references: [id])
   type           QuestionType
-  text           String       @db.Text
-  points         Float        @default(1.0)
-  difficulty     Int          @default(1)
-  isArchived     Boolean      @default(false)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  text           String             @db.Text
+  points         Float              @default(1.0)
+  difficulty     QuestionDifficulty @default(MEDIUM)
+  subject        String?            // e.g. "Mathematics", "History"
+  topic          String?            // e.g. "Algebra", "World War II"
+  tags           String[]           // Free-form tags for flexible filtering
+  duration       Int?               // Time to solve in seconds
+  explanation    String?            @db.Text // Feedback/explanation for the answer
+  isArchived     Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
 
   options       Option[]
   examQuestions ExamQuestion[]
@@ -107,6 +119,9 @@ model Question {
 
   @@index([organizationId])
   @@index([type])
+  @@index([difficulty])
+  @@index([subject])
+  @@index([isArchived])
 }
 
 model Option {

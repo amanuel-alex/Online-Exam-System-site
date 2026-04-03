@@ -14,7 +14,7 @@ import { Prisma, Role } from '@prisma/client';
 
 @Injectable()
 export class OrganizationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // ─────────────────────────────────────────────
   // CREATE
