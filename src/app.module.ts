@@ -14,6 +14,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { FileModule } from './modules/file/file.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { OrganizationConfigModule } from './modules/organization-config/organization-config.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { NotificationModule } from './modules/notification/notification.module';
     AuditLogModule,
     FileModule,
     NotificationModule,
+    OrganizationConfigModule,
   ],
   controllers: [AppController],
   providers: [AppService],
