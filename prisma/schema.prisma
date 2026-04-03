@@ -57,6 +57,19 @@ enum SessionStatus {
 // ------------------------------------------------------
 // Models
 // ------------------------------------------------------
+enum VerificationStatus {
+  NOT_SUBMITTED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum IdType {
+  NATIONAL_ID
+  PASSPORT
+  FAYDA
+  OTHER
+}
 
 model Organization {
   id        String   @id @default(uuid())
@@ -91,9 +104,14 @@ model User {
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   isActive       Boolean       @default(true)
 
-  // 2FA Ready Structure
+  // Identity Verification (Fayda/National ID Ready)
+  verificationStatus VerificationStatus @default(NOT_SUBMITTED)
+  identity           UserIdentity?
+
   isTwoFactorEnabled Boolean   @default(false)
   twoFactorSecret    String?
+
+  identitiesToVerify UserIdentity[] @relation("IdentityVerifier")
 
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -394,6 +412,35 @@ model AuditLog {
   @@index([action])
   @@index([resourceType, resourceId])
   @@index([timestamp])
+}
+
+model UserIdentity {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  idType         IdType
+  idNumber       String   @unique // Cryptographic index for uniqueness
+  
+  documentUrl    String?  // URL to the uploaded ID scan
+  metadata       Json?    // E.g. { expiryDate: "...", country: "ETH" }
+
+  status         VerificationStatus @default(PENDING)
+  
+  verifiedById   String?
+  verifiedBy     User?    @relation("IdentityVerifier", fields: [verifiedById], references: [id])
+  verifiedAt     DateTime?
+  rejectionReason String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([idNumber])
+  @@index([status])
 }
 
 model Notification {
