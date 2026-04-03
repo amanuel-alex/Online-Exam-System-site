@@ -30,12 +30,17 @@ export class UsersService {
     }
 
     const salt = await bcrypt.genSalt();
-    const hashedPassword = await bcrypt.hash(createUserDto.passwordHash, salt);
+    const hashedPassword = await bcrypt.hash(createUserDto.password, salt);
 
     const newUser = await this.prisma.user.create({
       data: {
-        ...createUserDto,
+        email: createUserDto.email,
         passwordHash: hashedPassword,
+        firstName: createUserDto.firstName,
+        lastName: createUserDto.lastName,
+        role: createUserDto.role,
+        organizationId: createUserDto.organizationId,
+        isActive: createUserDto.isActive ?? true,
       },
       select: this.getUserSelect(),
     });
