@@ -13,6 +13,7 @@ import { GradingModule } from './modules/grading/grading.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AuditLogModule } from './modules/audit-log/audit-log.module';
 import { FileModule } from './modules/file/file.module';
+import { NotificationModule } from './modules/notification/notification.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { FileModule } from './modules/file/file.module';
     AnalyticsModule,
     AuditLogModule,
     FileModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
