@@ -90,6 +90,11 @@ model User {
   organizationId String?       // Nullable because System Admins don't belong to one org
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   isActive       Boolean       @default(true)
+
+  // 2FA Ready Structure
+  isTwoFactorEnabled Boolean   @default(false)
+  twoFactorSecret    String?
+
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   deletedAt      DateTime?
