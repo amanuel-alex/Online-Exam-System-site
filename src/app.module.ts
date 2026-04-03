@@ -17,6 +17,8 @@ import { NotificationModule } from './modules/notification/notification.module';
 import { OrganizationConfigModule } from './modules/organization-config/organization-config.module';
 import { CacheModule } from './common/cache/cache.module';
 import { QueueModule } from './common/queue/queue.module';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { RequestLoggerInterceptor } from './common/interceptors/request-logger.interceptor';
 
 @Module({
   imports: [
@@ -37,6 +39,12 @@ import { QueueModule } from './common/queue/queue.module';
     QueueModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: RequestLoggerInterceptor, // Registering Global Request Monitoring
+    },
+  ],
 })
 export class AppModule {}

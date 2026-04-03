@@ -1,36 +1,40 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // 1. Global Exception Filter (Standard format)
+  // 1. API Versioning (URI based: /api/v1/...)
+  // This ensures future upgrades like /api/v2/ won't break existing national clients.
+  app.setGlobalPrefix('api');
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: '1',
+  });
+
+  // 2. Global Exception Filter (Standard and Production-level logging)
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // 2. Global validation (Automated Sanitization & Type Conversion)
+  // 3. Global validation (Automated Sanitization)
   app.useGlobalPipes(new ValidationPipe({
-    whitelist: true, // Strips malicious/unexpected fields
-    transform: true, 
-    forbidNonWhitelisted: true, // Rejects requests with non-DTO fields
+    whitelist: true,
+    transform: true,
+    forbidNonWhitelisted: true,
   }));
 
-  // 3. Enable reading HTTP-only refresh tokens
+  // 4. Enable reading HTTP-only refresh tokens
   app.use(cookieParser());
   
-  // 4. Strict CORS configuration
+  // 5. Strict CORS configuration
   app.enableCors({
-    origin: process.env.FRONTEND_URL || true, // Limit to specific frontend in production
+    origin: process.env.FRONTEND_URL || true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-idempotency-key'],
   });
-
-  // NOTE: Advanced security like Helmet or Rate-Limit guards 
-  // should be enabled after installing the respective packages.
-  // app.use(helmet());
 
   await app.listen(process.env.PORT ?? 3000);
 }
