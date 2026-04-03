@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Role } from '@prisma/client';
@@ -26,7 +27,7 @@ export class AnalyticsService {
         attempt: {
           include: {
             answers: {
-              include: { question: true }
+              include: { question: true, version: true }
             }
           }
         }
@@ -42,8 +43,9 @@ export class AnalyticsService {
     for (const res of results) {
       for (const ans of res.attempt.answers) {
         const q = ans.question;
+        const v = ans.version;
         const score = ans.score ?? 0;
-        const max = q.points; // Simple points from bank
+        const max = v?.points ?? 1; // Use point-in-time points from the versioned record
 
         if (q.subject) {
           if (!performance.subjects[q.subject]) performance.subjects[q.subject] = { earned: 0, total: 0, count: 0 };

@@ -109,23 +109,49 @@ model Question {
   organizationId String
   organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdById    String
-  createdBy      User               @relation("QuestionCreator", fields: [createdById], references: [id])
-  type           QuestionType
-  text           String             @db.Text
-  points         Float              @default(1.0)
+  explanation    String?            @db.Text
+  isArchived     Boolean            @default(false)
+  
   difficulty     QuestionDifficulty @default(MEDIUM)
   subject        String?            // e.g. "Mathematics", "History"
   topic          String?            // e.g. "Algebra", "World War II"
   tags           String[]           // Free-form tags for flexible filtering
-  duration       Int?               // Time to solve in seconds
-  explanation    String?            @db.Text // Feedback/explanation for the answer
-  isArchived     Boolean            @default(false)
+  
+  currentVersionId String?          @unique
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
-  options       Option[]
+  versions      QuestionVersion[]
   examQuestions ExamQuestion[]
   answers       AttemptAnswer[]
+
+  @@index([organizationId])
+  @@index([subject])
+  @@index([isArchived])
+}
+
+model QuestionVersion {
+  id             String             @id @default(uuid())
+  questionId     String
+  question       Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  versionNumber  Int                @default(1)
+  
+  type           QuestionType
+  text           String             @db.Text
+  points         Float              @default(1.0)
+  explanation    String?            @db.Text
+  
+  createdById    String
+  createdBy      User               @relation(fields: [createdById], references: [id])
+  createdAt      DateTime           @default(now())
+
+  options        Option[]
+  examQuestions  ExamQuestion[]
+  answers        AttemptAnswer[]
+
+  @@unique([questionId, versionNumber])
+  @@index([questionId])
+}
 
   @@index([organizationId])
   @@index([type])
@@ -135,10 +161,11 @@ model Question {
 }
 
 model Option {
-  id         String   @id @default(uuid())
-  questionId String
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  text       String
+  id                String          @id @default(uuid())
+  questionId        String?         // Legacy
+  questionVersionId String
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  text              String
   isCorrect  Boolean  @default(false)
   orderIndex Int      @default(0) // Control display order
 
@@ -182,9 +209,11 @@ model Exam {
 model ExamQuestion {
   id             String   @id @default(uuid())
   examId         String
-  exam           Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  exam           Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
   questionId     String
-  question       Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  question       Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  versionId      String?
+  version        QuestionVersion? @relation(fields: [versionId], references: [id])
   orderIndex     Int      // Serves as ordering if randomizeQuestions is false
   pointsOverride Float?   // Optional override for points on this specific exam
 
@@ -225,6 +254,8 @@ model AttemptAnswer {
   attempt    ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
   questionId String
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  versionId  String?
+  version    QuestionVersion? @relation(fields: [versionId], references: [id])
   
   // Polymorphic-like storage based on question type
   textAnswer      String?  @db.Text // Used for ESSAY
