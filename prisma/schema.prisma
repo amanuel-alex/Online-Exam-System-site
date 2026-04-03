@@ -1,9 +1,204 @@
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------
+// Enums
+// ------------------------------------------------------
+
+enum Role {
+  SYSTEM_ADMIN
+  ORG_ADMIN
+  TEACHER
+  EXAMINER
+  STUDENT
+}
+
+enum OrgType {
+  HIGH_SCHOOL
+  UNIVERSITY
+  TVET
+  COC
+  NATIONAL
+  OTHER
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  ESSAY
+  SHORT_ANSWER
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+}
+
+// ------------------------------------------------------
+// 1 & 2. Authorization and Users
+// ------------------------------------------------------
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  type        OrgType  @default(OTHER)
+  metadata    Json?    // Flexible field for extra settings
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users         User[]
+  questionBanks QuestionBank[]
+  exams         Exam[]
+}
+
+model User {
+  id             String        @id @default(uuid())
+  email          String        @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           Role          @default(STUDENT)
+  
+  // Multi-tenancy: System admins might not belong to a specific org
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  createdQuestionBanks QuestionBank[] @relation("QuestionBankCreator")
+  createdExams         Exam[]         @relation("ExamCreator")
+  attempts             Attempt[]      @relation("StudentAttempts")
+  gradedAttempts       Attempt[]      @relation("Evaluator")
+}
+
+// ------------------------------------------------------
+// 3. Question Bank
+// ------------------------------------------------------
+
+model QuestionBank {
+  id             String       @id @default(uuid())
+  title          String
+  description    String?
+  
+  // Scoped to an organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  createdById    String
+  createdBy      User         @relation("QuestionBankCreator", fields: [createdById], references: [id])
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  questions Question[]
+}
+
+model Question {
+  id             String       @id @default(uuid())
+  questionBankId String
+  questionBank   QuestionBank @relation(fields: [questionBankId], references: [id], onDelete: Cascade)
+  type           QuestionType
+  text           String
+  
+  // Stored as JSON for maximum flexibility (e.g., options array, true/false, text match)
+  options        Json?        
+  correctAnswer  Json         
+  points         Int          @default(1)
+  difficulty     Int          @default(1) // Scale 1-5
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  examQuestions  ExamQuestion[]
+}
+
+// ------------------------------------------------------
+// 4. Exam Module
+// ------------------------------------------------------
+
+model Exam {
+  id             String       @id @default(uuid())
+  title          String
+  description    String?
+  
+  // Scoped to an organization
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  createdById    String
+  createdBy      User         @relation("ExamCreator", fields: [createdById], references: [id])
+  
+  startTime      DateTime?
+  endTime        DateTime?
+  durationMin    Int?
+  
+  isPublished    Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  questions ExamQuestion[]
+  attempts  Attempt[]
+}
+
+// Intersect table between Exam and Questions to allow ordering and reusing
+model ExamQuestion {
+  id         String   @id @default(uuid())
+  examId     String
+  exam       Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  orderIndex Int
+
+  @@unique([examId, questionId])
+}
+
+// ------------------------------------------------------
+// 5 & 6. Attempts and Grading
+// ------------------------------------------------------
+
+model Attempt {
+  id         String        @id @default(uuid())
+  examId     String
+  exam       Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    User          @relation("StudentAttempts", fields: [studentId], references: [id], onDelete: Cascade)
+  
+  startTime  DateTime      @default(now())
+  endTime    DateTime?
+  status     AttemptStatus @default(IN_PROGRESS)
+  
+  // Grading
+  totalScore Float?
+  gradedById String?
+  gradedBy   User?         @relation("Evaluator", fields: [gradedById], references: [id])
+
+  responses AttemptResponse[]
+}
+
+model AttemptResponse {
+  id         String   @id @default(uuid())
+  attemptId  String
+  attempt    Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  
+  // Reference to the original question to match up responses
+  questionId String
+  // We keep this loosely coupled in case a question gets deleted but we must keep the response history
+  
+  // Student's answer
+  answerData Json     
+  
+  // Auto or manual grading result for this specific question
+  score       Float?   
+  evalComment String? 
 }
