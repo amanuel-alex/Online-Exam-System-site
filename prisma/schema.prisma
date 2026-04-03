@@ -376,14 +376,20 @@ model AuditLog {
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])
   
-  action         String   // e.g. "USER_LOGIN", "EXAM_START", "QUESTION_EDIT", "SUSPICIOUS_ACTIVITY"
-  metadata       Json?    // e.g. { ip: "...", browser: "...", oldVersion: "..." }
+  action         String   // e.g. "USER_LOGIN", "EXAM_UPDATED", "QUESTION_VERSIONED"
+  resourceType   String?  // e.g. "EXAM", "QUESTION", "USER", "CONFIG"
+  resourceId     String?  // The ID of the affected resource
+
+  originalValue  Json?    // State BEFORE the change
+  newValue       Json?    // State AFTER the change
   
+  metadata       Json?    // Contextual data: { ip: "...", browser: "..." }
   timestamp      DateTime @default(now())
 
   @@index([userId])
   @@index([organizationId])
   @@index([action])
+  @@index([resourceType, resourceId])
   @@index([timestamp])
 }
 
