@@ -54,6 +54,19 @@ enum SessionStatus {
   CANCELLED
 }
 
+enum Locale {
+  EN
+  AM
+  OM
+}
+
+enum VersionStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
 // ------------------------------------------------------
 // Models
 // ------------------------------------------------------
@@ -105,6 +118,7 @@ model User {
   organizationId String?       // Nullable because System Admins don't belong to one org
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   isActive       Boolean       @default(true)
+  preferredLanguage Locale      @default(EN)
 
   // Identity Verification (Fayda/National ID Ready)
   verificationStatus VerificationStatus @default(NOT_SUBMITTED)
@@ -114,6 +128,7 @@ model User {
   twoFactorSecret    String?
 
   identitiesToVerify UserIdentity[] @relation("IdentityVerifier")
+  reviewedVersions   QuestionVersion[] @relation("VersionReviewer")
 
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -167,7 +182,18 @@ model QuestionVersion {
   questionId     String
   question       Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
   versionNumber  Int                @default(1)
+  status         VersionStatus      @default(DRAFT)
   
+  reviewerId     String?
+  reviewer       User?              @relation("VersionReviewer", fields: [reviewerId], references: [id])
+  reviewComment  String?            @db.Text
+  reviewedAt     DateTime?
+  
+  language       Locale             @default(EN)
+  translationOfId String?
+  translationOf  QuestionVersion?   @relation("Translations", fields: [translationOfId], references: [id])
+  translations   QuestionVersion[]  @relation("Translations")
+
   type           QuestionType
   text           String             @db.Text
   points         Float              @default(1.0)
@@ -275,6 +301,8 @@ model ExamAttempt {
   
   riskScore     Float         @default(0.0) // Fairness & Anomaly Detection
   riskFlags     String[]      // E.g. ["TOO_FAST", "IDENTICAL_ANSWERS"]
+  
+  isOffline     Boolean       @default(false) // Optimized for rural sync sessions
 
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
@@ -316,6 +344,10 @@ model AttemptAnswer {
   evalComment  String?  @db.Text
   gradedById   String?
   gradedBy     User?    @relation("AnswerGrader", fields: [gradedById], references: [id])
+
+  // Sync & Conflict Resolution
+  clientTimestamp DateTime @default(now())
+  syncedAt        DateTime @default(now())
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
