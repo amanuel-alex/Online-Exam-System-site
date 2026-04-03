@@ -8,6 +8,7 @@ import { OrganizationModule } from './modules/organization/organization.module';
 import { QuestionBankModule } from './modules/question-bank/question-bank.module';
 import { ExamModule } from './modules/exam/exam.module';
 import { ExamAttemptModule } from './modules/exam-attempt/exam-attempt.module';
+import { ExamSessionModule } from './modules/exam-session/exam-session.module';
 import { GradingModule } from './modules/grading/grading.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { GradingModule } from './modules/grading/grading.module';
     OrganizationModule,
     QuestionBankModule,
     ExamModule,
+    ExamSessionModule,
     ExamAttemptModule,
     GradingModule,
   ],

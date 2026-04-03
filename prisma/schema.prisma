@@ -47,6 +47,13 @@ enum QuestionDifficulty {
   EXPERT
 }
 
+enum SessionStatus {
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
 // ------------------------------------------------------
 // Models
 // ------------------------------------------------------
@@ -64,6 +71,7 @@ model Organization {
 
   users     User[]
   exams     Exam[]
+  sessions  ExamSession[]
   questions Question[] // Link questions to the organization (question bank)
 
   @@index([slug])
@@ -88,6 +96,8 @@ model User {
   attempts         ExamAttempt[] @relation("StudentAttempts")
   gradedAnswers    AttemptAnswer[] @relation("AnswerGrader")
   results          Result[]
+  sessionsCreated  ExamSession[]
+  sessionEnrols    SessionUser[]
 
   @@index([email])
   @@index([organizationId])
@@ -162,6 +172,7 @@ model Exam {
   updatedAt          DateTime     @updatedAt
 
   examQuestions ExamQuestion[]
+  sessions      ExamSession[]
   attempts      ExamAttempt[]
 
   @@index([organizationId])
@@ -187,6 +198,9 @@ model ExamAttempt {
   exam          Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
   studentId     String
   student       User          @relation("StudentAttempts", fields: [studentId], references: [id], onDelete: Cascade)
+  
+  sessionId     String?
+  session       ExamSession?  @relation(fields: [sessionId], references: [id])
   
   attemptNumber Int           @default(1)
   startTime     DateTime      @default(now())
@@ -254,4 +268,41 @@ model Result {
   @@index([studentId])
   @@index([attemptId])
   @@index([isPassed])
+}
+
+model ExamSession {
+  id             String       @id @default(uuid())
+  title          String
+  examId         String
+  exam           Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User         @relation(fields: [createdById], references: [id])
+  
+  startTime      DateTime
+  endTime        DateTime
+  
+  status         SessionStatus @default(SCHEDULED)
+  isPublic       Boolean       @default(false) // If true, anyone in the org can join. If false, only mapped users.
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  sessionUsers   SessionUser[]
+  attempts       ExamAttempt[]
+
+  @@index([examId])
+  @@index([organizationId])
+  @@index([status])
+}
+
+model SessionUser {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
 }
