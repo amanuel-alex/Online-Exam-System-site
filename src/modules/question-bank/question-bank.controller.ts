@@ -23,8 +23,10 @@ import { Permissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Role } from '@prisma/client';
 
+import { MultiTenantGuard } from '../../common/guards/multi-tenant.guard';
+
 @Controller('question-bank')
-@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard, MultiTenantGuard)
 export class QuestionBankController {
   constructor(private readonly questionBankService: QuestionBankService) {}
 

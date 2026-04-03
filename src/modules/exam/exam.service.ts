@@ -111,6 +111,23 @@ export class ExamService {
   }
 
   // ─────────────────────────────────────────────
+  // UPDATE
+  // ─────────────────────────────────────────────
+
+  async update(id: string, dto: UpdateExamDto, currentUser: any) {
+    const exam = await this.findOne(id, currentUser); // Ensures existence & org access
+    this.assertCanManageExams(currentUser);
+
+    return this.prisma.exam.update({
+      where: { id },
+      data: {
+        ...dto,
+        ...(dto.organizationId && { organizationId: this.resolveOrganizationId(dto.organizationId, currentUser) }),
+      },
+    });
+  }
+
+  // ─────────────────────────────────────────────
   // AUTO QUESTION SELECTION (RANDOM FROM BANK)
   // ─────────────────────────────────────────────
 

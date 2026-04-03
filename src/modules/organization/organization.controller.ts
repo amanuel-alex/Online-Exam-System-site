@@ -24,8 +24,10 @@ import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Role } from '@prisma/client';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
+import { MultiTenantGuard } from '../../common/guards/multi-tenant.guard';
+
 @Controller('organizations')
-@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard, MultiTenantGuard)
 export class OrganizationController {
   constructor(private readonly orgService: OrganizationService) {}
 

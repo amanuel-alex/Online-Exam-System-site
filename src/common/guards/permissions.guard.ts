@@ -6,11 +6,27 @@ import { Role } from '@prisma/client';
 // Simple RBAC mapping for demonstration purposes.
 // In a full application, permissions might be stored in the DB.
 const RolePermissions: Record<Role, string[]> = {
-  SYSTEM_ADMIN: ['create:user', 'read:user', 'update:user', 'delete:user', 'assign:role', 'organization:user:manage'],
-  ORG_ADMIN: ['create:user', 'read:user', 'update:user', 'assign:role', 'organization:user:manage'],
-  TEACHER: ['read:user'],
-  EXAMINER: ['read:user'],
-  STUDENT: [],
+  SYSTEM_ADMIN: [
+    'create:user', 'read:user', 'update:user', 'delete:user', 'assign:role', 'organization:user:manage',
+    'create:question', 'read:question', 'update:question', 'delete:question',
+    'create:exam', 'read:exam', 'update:exam', 'delete:exam', 'start:exam', 'grade:exam'
+  ],
+  ORG_ADMIN: [
+    'create:user', 'read:user', 'update:user', 'assign:role', 'organization:user:manage',
+    'create:question', 'read:question', 'update:question', 'delete:question',
+    'create:exam', 'read:exam', 'update:exam', 'delete:exam', 'grade:exam'
+  ],
+  TEACHER: [
+    'read:user', 
+    'create:question', 'read:question', 'update:question', 'delete:question',
+    'create:exam', 'read:exam', 'update:exam', 'start:exam', 'grade:exam'
+  ],
+  EXAMINER: [
+    'read:user', 'read:question', 'read:exam', 'grade:exam'
+  ],
+  STUDENT: [
+    'read:exam', 'start:exam'
+  ],
 };
 
 @Injectable()
