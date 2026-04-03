@@ -316,6 +316,9 @@ model Result {
   isReleased Boolean  @default(false)
   releasedAt DateTime?
   
+  isLocked   Boolean  @default(false) // Prevents any further edits once finalized
+  verificationHash String?         // Cryptographic hash of (studentId + totalScore + attemptId)
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   deletedAt  DateTime?
