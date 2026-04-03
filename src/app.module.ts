@@ -11,6 +11,7 @@ import { ExamAttemptModule } from './modules/exam-attempt/exam-attempt.module';
 import { ExamSessionModule } from './modules/exam-session/exam-session.module';
 import { GradingModule } from './modules/grading/grading.module';
 import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { AuditLogModule } from './modules/audit-log/audit-log.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     ExamAttemptModule,
     GradingModule,
     AnalyticsModule,
+    AuditLogModule,
   ],
   controllers: [AppController],
   providers: [AppService],

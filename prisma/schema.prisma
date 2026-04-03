@@ -337,3 +337,21 @@ model ExamSessionUser {
 
   @@unique([sessionId, userId])
 }
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id])
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  
+  action         String   // e.g. "USER_LOGIN", "EXAM_START", "QUESTION_EDIT", "SUSPICIOUS_ACTIVITY"
+  metadata       Json?    // e.g. { ip: "...", browser: "...", oldVersion: "..." }
+  
+  timestamp      DateTime @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([timestamp])
+}
