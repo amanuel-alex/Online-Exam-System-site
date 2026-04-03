@@ -7,10 +7,25 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { GradeManualAnswerDto } from './dto/grade-manual-answer.dto';
 import { Prisma, QuestionType, Role, AttemptStatus } from '@prisma/client';
+import { ExaminaQueueService, QueueName } from '../../common/queue/queue.service';
 
 @Injectable()
 export class GradingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly queue: ExaminaQueueService,
+  ) {}
+
+  /**
+   * High-Performance Async Grading Trigger
+   * 
+   * Offloads MCQ/TrueFalse evaluation to the background queue
+   * so the student's submission process is instantaneous.
+   */
+  async triggerAutoGrade(attemptId: string) {
+    await this.queue.addJob(QueueName.GRADING, 'AUTO_GRADE', { attemptId });
+    return { status: 'PENDING_GRADES', message: 'Evaluation in progress.' };
+  }
 
   // ─────────────────────────────────────────────
   // AUTO-GRADE MCQ & TRUE/FALSE
@@ -42,7 +57,6 @@ export class GradingService {
       const eq = attempt.exam.examQuestions.find(i => i.questionId === answer.questionId);
       if (!eq) continue;
 
-      // Use the point-in-time version captured for this exam
       const v = eq.version; 
       if (!v) continue;
 
@@ -50,7 +64,7 @@ export class GradingService {
 
       if (v.type === QuestionType.MCQ || v.type === QuestionType.TRUE_FALSE) {
         const correctOptions = v.options.filter(o => o.isCorrect).map(o => o.id);
-        const studentSelections = answer.selectedOptions || (answer.optionId ? [answer.optionId] : []);
+        const studentSelections = answer.selectedOptions || [];
 
         let awardedPoints = 0;
 
@@ -81,7 +95,7 @@ export class GradingService {
   }
 
   // ─────────────────────────────────────────────
-  // FINALIZE & CALCULATE (CRITICAL TRANSACTION)
+  // FINALIZE & CALCULATE (TRANSACTION)
   // ─────────────────────────────────────────────
 
   async finalizeResultIfComplete(attemptId: string) {
@@ -96,9 +110,7 @@ export class GradingService {
     if (!attempt) throw new NotFoundException('Attempt not found.');
 
     const totalEarned = attempt.answers.reduce((sum, a) => sum + (a.score ?? 0), 0);
-    // Use versioned points or overrides
     const totalMax = attempt.exam.examQuestions.reduce((sum, eq) => sum + (eq.pointsOverride ?? eq.version?.points ?? 1), 0);
-    
     const percentage = (totalEarned / (totalMax || 1)) * 100;
     const isPassed = percentage >= attempt.exam.passPercentage;
 
@@ -106,7 +118,6 @@ export class GradingService {
     const questionsGradedCount = attempt.answers.filter(a => a.score !== null).length;
     const isFullyGraded = (questionsGradedCount === questionsNeeded && attempt.status === AttemptStatus.SUBMITTED);
 
-    // ATOMIC UPDATE: Result + Attempt Status
     return this.prisma.$transaction(async (tx) => {
       const result = await tx.result.upsert({
         where: { attemptId },
@@ -134,16 +145,12 @@ export class GradingService {
           data: { status: AttemptStatus.GRADED },
         });
 
-        // Trigger notification
-        await tx.notification.create({
-          data: {
-            userId: attempt.studentId,
-            organizationId: attempt.organizationId,
-            title: 'Exam Results Available',
-            message: `Your results for "${attempt.exam.title}" are now available for review.`,
-            type: 'RESULT_PUBLISHED',
-            metadata: { attemptId, examId: attempt.examId },
-          },
+        // Background Job for Results Publication Notification
+        await this.queue.addJob(QueueName.NOTIFICATIONS, 'RESULT_PUBLISHED', {
+          userId: attempt.studentId,
+          organizationId: attempt.organizationId,
+          attemptId: attempt.id,
+          payload: { examTitle: attempt.exam.title }
         });
       }
 
@@ -160,10 +167,10 @@ export class GradingService {
 
     const answer = await this.prisma.attemptAnswer.findUnique({
       where: { attemptId_questionId: { attemptId, questionId: dto.questionId } },
-      include: { attempt: { include: { exam: true } }, version: true }
+      include: { attempt: { include: { exam: true } } }
     });
 
-    if (!answer) throw new NotFoundException('Answer not found.');
+    if (!answer) throw new NotFoundException('Answer record not found.');
     this.assertOrgAccess(answer.attempt.organizationId, currentUser);
 
     const eq = await this.prisma.examQuestion.findUnique({
@@ -172,7 +179,7 @@ export class GradingService {
     });
 
     const maxPoints = eq.pointsOverride ?? eq.version?.points ?? 1;
-    if (dto.score > maxPoints) throw new BadRequestException(`Exceeds max points (${maxPoints}).`);
+    if (dto.score > maxPoints) throw new BadRequestException(`Exceeds max points of ${maxPoints}.`);
 
     await this.prisma.attemptAnswer.update({
       where: { id: answer.id },
@@ -198,7 +205,7 @@ export class GradingService {
 
   private assertOrgAccess(orgId: string, currentUser: any) {
     if (currentUser.role !== Role.SYSTEM_ADMIN && currentUser.organizationId !== orgId) {
-      throw new ForbiddenException('Cross-organization access forbidden.');
+      throw new ForbiddenException('Access to restricted organization grading is forbidden.');
     }
   }
 }
