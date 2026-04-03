@@ -6,8 +6,8 @@ import { Role } from '@prisma/client';
 // Simple RBAC mapping for demonstration purposes.
 // In a full application, permissions might be stored in the DB.
 const RolePermissions: Record<Role, string[]> = {
-  SYSTEM_ADMIN: ['create:user', 'read:user', 'update:user', 'delete:user', 'manage:roles'],
-  ORG_ADMIN: ['create:user', 'read:user', 'update:user'],
+  SYSTEM_ADMIN: ['create:user', 'read:user', 'update:user', 'delete:user', 'assign:role', 'organization:user:manage'],
+  ORG_ADMIN: ['create:user', 'read:user', 'update:user', 'assign:role', 'organization:user:manage'],
   TEACHER: ['read:user'],
   EXAMINER: ['read:user'],
   STUDENT: [],
