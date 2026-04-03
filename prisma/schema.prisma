@@ -91,6 +91,12 @@ model Organization {
   type      OrgType  @default(OTHER)
   isActive  Boolean  @default(true)
   settings  Json?    // Structured: grading system, pass score, proctoring, exam types
+  branding  Json?    // { logoUrl: "...", colors: { primary: "#...", secondary: "#..." } }
+  gradingRules Json?   // { system: "PERCENTAGE", scale: [...], penaltyForWrong: 0 }
+  examRules   Json?    // { autoSubmit: true, allowRetakes: false, proctoringLevel: "HIGH" }
+  
+  region    String?    // Geographic metadata for regional reporting (e.g. "Addis Ababa")
+  
   metadata  Json?    // Arbitrary extra data
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -140,6 +146,7 @@ model User {
   gradedAnswers    AttemptAnswer[] @relation("AnswerGrader")
   results          Result[]
   certificates     Certificate[] @relation("UserCertificates")
+  configUpdates    OrganizationConfig[] @relation("ConfigUpdater")
   sessionsCreated  ExamSession[]
   sessionEnrols    ExamSessionUser[]
 
@@ -573,4 +580,22 @@ model WebhookConfig {
   createdAt      DateTime       @default(now())
 
   @@index([organizationId])
+}
+
+model OrganizationConfig {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  category       String       @default("GENERAL") // BRANDING, GRADING, EXAM_POLICY
+  key            String
+  value          Json
+  
+  updatedById    String?
+  updatedBy      User?        @relation("ConfigUpdater", fields: [updatedById], references: [id])
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@index([category])
 }
