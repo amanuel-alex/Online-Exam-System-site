@@ -11,4 +11,12 @@ export class LogProctoringEventDto {
   @IsObject()
   @IsOptional()
   metadata?: Record<string, any>;
+
+  @IsString()
+  @IsOptional()
+  deviceId?: string;
+
+  @IsString()
+  @IsOptional()
+  ipAddress?: string;
 }

@@ -21,6 +21,7 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { RequestLoggerInterceptor } from './common/interceptors/request-logger.interceptor';
+import { ProctoringModule } from './modules/proctoring/proctoring.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { RequestLoggerInterceptor } from './common/interceptors/request-logger.i
     OrganizationConfigModule,
     CacheModule,
     QueueModule,
+    ProctoringModule,
   ],
   controllers: [AppController],
   providers: [

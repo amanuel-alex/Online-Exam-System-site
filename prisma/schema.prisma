@@ -268,6 +268,10 @@ model Exam {
   randomizeQuestions Boolean      @default(false)
   isPublished        Boolean      @default(false)
   passPercentage     Float        @default(50.0)
+
+  // Secure Exam Mode (SEB / Electron)
+  requireLockdown    Boolean      @default(false) 
+  sebConfig          Json?        // { browserExamKey: "...", configKey: "...", allowQuit: false }
   
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
@@ -317,6 +321,10 @@ model ExamAttempt {
   
   riskScore     Float         @default(0.0) // Fairness & Anomaly Detection
   riskFlags     String[]      // E.g. ["TOO_FAST", "IDENTICAL_ANSWERS"]
+
+  // Device & Network Security
+  deviceId      String?       // Browser fingerprint or HWID
+  ipAddress     String?       // To detect geographical spoofing
   
   isOffline     Boolean       @default(false) // Optimized for rural sync sessions
 
@@ -614,6 +622,10 @@ enum ProctoringEventType {
   TAB_SWITCH
   WINDOW_BLUR
   FULLSCREEN_EXIT
+  WEBCAM_SNAPSHOT
+  FACE_NOT_FOUND
+  MULTIPLE_FACES
+  DEVICE_CONFLICT
   OTHER
 }
 

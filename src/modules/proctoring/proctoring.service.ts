@@ -25,6 +25,22 @@ export class ProctoringService {
       throw new BadRequestException('Unauthorized event logging.');
     }
 
+    // Server-Side Conflict Detection
+    if (dto.deviceId && attempt.deviceId && dto.deviceId !== attempt.deviceId) {
+      // Log as a conflict event
+      await this.prisma.proctoringEvent.create({
+        data: {
+          attemptId: dto.attemptId,
+          userId: attempt.studentId,
+          examId: attempt.examId,
+          organizationId: attempt.organizationId,
+          eventType: ProctoringEventType.DEVICE_CONFLICT,
+          metadata: { originalDevice: attempt.deviceId, newDevice: dto.deviceId } as Prisma.InputJsonValue,
+        }
+      });
+      throw new BadRequestException('Exam session conflict: multiple device detected.');
+    }
+
     // 1. Store the event
     const event = await this.prisma.proctoringEvent.create({
       data: {
@@ -38,19 +54,20 @@ export class ProctoringService {
     });
 
     // 2. Recalculate Risk Score
-    // Logic: Weight events based on severity
     const updatedEvents = [...attempt.proctoringEvents, event];
     const riskScore = this.calculateRiskScore(updatedEvents);
     
     // 3. Generate Risk Flags
     const riskFlags = this.generateRiskFlags(updatedEvents, riskScore);
 
-    // 4. Update the Attempt
+    // 4. Update the Attempt Metadata
     await this.prisma.examAttempt.update({
       where: { id: dto.attemptId },
       data: {
         riskScore,
         riskFlags,
+        ...(dto.deviceId && { deviceId: dto.deviceId }),
+        ...(dto.ipAddress && { ipAddress: dto.ipAddress }),
       },
     });
 
@@ -71,12 +88,20 @@ export class ProctoringService {
         case ProctoringEventType.WINDOW_BLUR:
           score += 5;
           break;
+        case ProctoringEventType.FACE_NOT_FOUND:
+          score += 20;
+          break;
+        case ProctoringEventType.MULTIPLE_FACES:
+          score += 25;
+          break;
+        case ProctoringEventType.DEVICE_CONFLICT:
+          score += 50;
+          break;
         default:
           score += 1;
       }
     });
 
-    // Cap at 100
     return Math.min(score, 100);
   }
 
@@ -85,16 +110,16 @@ export class ProctoringService {
 
     if (currentScore > 70) flags.add('CRITICAL_RISK');
     else if (currentScore > 40) flags.add('HIGH_RISK');
-    else if (currentScore > 20) flags.add('MODERATE_RISK');
-
+    
     const typeCounts = events.reduce((acc, e) => {
       acc[e.eventType] = (acc[e.eventType] || 0) + 1;
       return acc;
     }, {});
 
     if (typeCounts[ProctoringEventType.TAB_SWITCH] > 3) flags.add('FREQUENT_TAB_SWITCH');
-    if (typeCounts[ProctoringEventType.FULLSCREEN_EXIT] > 1) flags.add('FULLSCREEN_VIOLATION');
-    if (typeCounts[ProctoringEventType.WINDOW_BLUR] > 5) flags.add('MULTIPLE_WINDOW_BLUR');
+    if (typeCounts[ProctoringEventType.FACE_NOT_FOUND] > 2) flags.add('SUSPICIOUS_ABSENCE');
+    if (typeCounts[ProctoringEventType.MULTIPLE_FACES] > 0) flags.add('COLLABORATION_DETECTED');
+    if (typeCounts[ProctoringEventType.DEVICE_CONFLICT] > 0) flags.add('MULTI_DEVICE_LOGIN');
 
     return Array.from(flags);
   }
