@@ -115,6 +115,7 @@ model Organization {
   auditLogs    AuditLog[]
   identities   UserIdentity[]
   configs      OrganizationConfig[]
+  proctoringEvents ProctoringEvent[]
 
   @@index([slug])
   @@index([isActive])
@@ -162,6 +163,7 @@ model User {
   auditLogs       AuditLog[]
   notifications   Notification[]
   idempotencyKeys IdempotencyKey[]
+  proctoringEvents ProctoringEvent[]
 
   @@index([email])
   @@index([organizationId])
@@ -275,6 +277,7 @@ model Exam {
   sessions      ExamSession[]
   attempts      ExamAttempt[]
   certificates  Certificate[]
+  proctoringEvents ProctoringEvent[]
 
   @@index([organizationId])
   @@index([isPublished])
@@ -326,6 +329,7 @@ model ExamAttempt {
 
   answers AttemptAnswer[]
   result  Result?
+  proctoringEvents ProctoringEvent[]
 
   @@unique([examId, studentId, attemptNumber]) // Prevent duplicate attempt numbers
   @@index([examId])
@@ -604,4 +608,37 @@ model OrganizationConfig {
   @@unique([organizationId, key])
   @@index([organizationId])
   @@index([category])
+}
+
+enum ProctoringEventType {
+  TAB_SWITCH
+  WINDOW_BLUR
+  FULLSCREEN_EXIT
+  OTHER
+}
+
+model ProctoringEvent {
+  id             String             @id @default(uuid())
+  attemptId      String
+  attempt        ExamAttempt        @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  
+  userId         String
+  user           User               @relation(fields: [userId], references: [id])
+  
+  examId         String
+  exam           Exam               @relation(fields: [examId], references: [id])
+  
+  eventType      ProctoringEventType
+  metadata       Json?              // Contextual: browser, OS, duration, etc.
+  
+  timestamp      DateTime           @default(now())
+  
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+
+  @@index([attemptId])
+  @@index([userId])
+  @@index([examId])
+  @@index([organizationId])
+  @@index([eventType])
 }
