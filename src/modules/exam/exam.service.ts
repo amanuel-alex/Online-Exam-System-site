@@ -97,7 +97,13 @@ export class ExamService {
           orderBy: { orderIndex: 'asc' },
           include: {
             question: {
-              include: { options: { orderBy: { orderIndex: 'asc' } } }
+              include: { 
+                versions: {
+                  orderBy: { versionNumber: 'desc' },
+                  take: 1,
+                  include: { options: { orderBy: { orderIndex: 'asc' } } }
+                } 
+              }
             }
           }
         }
@@ -188,7 +194,13 @@ export class ExamService {
         examQuestions: {
           include: {
             question: {
-              include: { options: { orderBy: { orderIndex: 'asc' } } }
+              include: { 
+                versions: {
+                  orderBy: { versionNumber: 'desc' },
+                  take: 1,
+                  include: { options: { orderBy: { orderIndex: 'asc' } } }
+                } 
+              }
             }
           }
         }
@@ -203,13 +215,14 @@ export class ExamService {
     if (exam.startTime && now < exam.startTime) throw new ForbiddenException('Exam window not open.');
     if (exam.endTime && now > exam.endTime) throw new ForbiddenException('Exam window closed.');
 
-    const attemptCount = await this.prisma.attempt.count({ where: { examId, studentId: currentUser.id } });
+    const attemptCount = await this.prisma.examAttempt.count({ where: { examId, studentId: currentUser.id } });
     if (attemptCount >= exam.maxAttempts) throw new ConflictException('Max attempts reached.');
 
-    const attempt = await this.prisma.attempt.create({
+    const attempt = await this.prisma.examAttempt.create({
       data: {
         examId,
         studentId: currentUser.id,
+        organizationId: exam.organizationId,
         attemptNumber: attemptCount + 1,
         status: AttemptStatus.IN_PROGRESS,
       },
@@ -218,12 +231,13 @@ export class ExamService {
     // Handle randomization of questions for the student delivery session.
     let questionData = exam.examQuestions.map((eq) => {
       const q = eq.question;
+      const v = q.versions?.[0];
       return {
         id: q.id,
-        text: q.text,
-        type: q.type,
-        points: eq.pointsOverride ?? q.points,
-        options: q.options.map((o) => ({ id: o.id, text: o.text, orderIndex: o.orderIndex })),
+        text: v?.text,
+        type: v?.type,
+        points: eq.pointsOverride ?? v?.points,
+        options: v?.options?.map((o) => ({ id: o.id, text: o.text, orderIndex: o.orderIndex })) ?? [],
       };
     });
 

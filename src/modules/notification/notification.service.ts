@@ -10,9 +10,15 @@ export class NotificationService {
    * Records a notification into the DB for in-app retrieval.
    */
   async notify(userId: string, title: string, message: string, type: string, metadata?: any) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.organizationId) {
+      console.warn('Cannot send notification, user or org missing.');
+      return null;
+    }
     return this.prisma.notification.create({
       data: {
         userId,
+        organizationId: user.organizationId,
         title,
         message,
         type,

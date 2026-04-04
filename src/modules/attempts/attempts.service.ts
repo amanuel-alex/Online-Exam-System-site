@@ -33,15 +33,16 @@ export class AttemptService {
     if (exam.startTime && now < exam.startTime) throw new ForbiddenException('Exam window not open.');
     if (exam.endTime && now > exam.endTime) throw new ForbiddenException('Exam window closed.');
 
-    const attemptCount = await this.prisma.attempt.count({
+    const attemptCount = await this.prisma.examAttempt.count({
       where: { examId, studentId: currentUser.id },
     });
     if (attemptCount >= exam.maxAttempts) throw new ConflictException('Max attempts reached.');
 
-    const attempt = await this.prisma.attempt.create({
+    const attempt = await this.prisma.examAttempt.create({
       data: {
         examId,
         studentId: currentUser.id,
+        organizationId: exam.organizationId,
         attemptNumber: attemptCount + 1,
         status: AttemptStatus.IN_PROGRESS,
         startTime: now,
@@ -74,7 +75,7 @@ export class AttemptService {
 
     // Handle polymorphic-like upsert
     // Prisma .upsert for unique constraints: [attemptId, questionId]
-    return this.prisma.answer.upsert({
+    return this.prisma.attemptAnswer.upsert({
       where: {
         attemptId_questionId: {
           attemptId,
@@ -103,7 +104,7 @@ export class AttemptService {
   async submitAttempt(attemptId: string, currentUser: any) {
     const attempt = await this.assertAttemptAccess(attemptId, currentUser);
 
-    const submission = await this.prisma.attempt.update({
+    const submission = await this.prisma.examAttempt.update({
       where: { id: attemptId },
       data: {
         status: AttemptStatus.SUBMITTED,
@@ -121,7 +122,7 @@ export class AttemptService {
   // ─────────────────────────────────────────────
 
   async findAttempt(id: string, currentUser: any) {
-    const attempt = await this.prisma.attempt.findUnique({
+    const attempt = await this.prisma.examAttempt.findUnique({
       where: { id },
       include: {
         exam: { select: { title: true, durationMinutes: true, endTime: true } },
@@ -140,7 +141,7 @@ export class AttemptService {
   // ─────────────────────────────────────────────
 
   private async assertAttemptAccess(attemptId: string, currentUser: any) {
-    const attempt = await this.prisma.attempt.findUnique({
+    const attempt = await this.prisma.examAttempt.findUnique({
       where: { id: attemptId },
       include: { exam: true },
     });
@@ -161,7 +162,7 @@ export class AttemptService {
 
     if (deadline && now > deadline) {
       // Auto-submit if time exceeded and user tries to save/submit
-      await this.prisma.attempt.update({
+      await this.prisma.examAttempt.update({
         where: { id: attemptId },
         data: { status: AttemptStatus.SUBMITTED, endTime: deadline },
       });

@@ -35,7 +35,7 @@ export class FileController {
   ) {
     if (!file) throw new BadRequestException('No file uploaded.');
 
-    const url = await this.storage.upload(file);
+    const url = await this.storage.upload(file, 'uploads');
 
     return {
       url,

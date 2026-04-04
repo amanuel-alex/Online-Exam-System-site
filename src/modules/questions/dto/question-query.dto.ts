@@ -8,7 +8,7 @@ import {
   Max,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
-import { QuestionType } from '@prisma/client';
+import { QuestionType, QuestionDifficulty } from '@prisma/client';
 
 export class QuestionQueryDto {
   @IsOptional()
@@ -34,13 +34,10 @@ export class QuestionQueryDto {
   @IsEnum(QuestionType)
   type?: QuestionType;
 
-  /** Filter by exact difficulty level (1–5) */
+  /** Filter by exact difficulty level */
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(5)
-  difficulty?: number;
+  @IsEnum(QuestionDifficulty)
+  difficulty?: QuestionDifficulty;
 
   /** Filter by subject (case-insensitive partial match) */
   @IsOptional()

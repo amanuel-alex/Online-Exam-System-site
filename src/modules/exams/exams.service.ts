@@ -107,7 +107,13 @@ export class ExamsService {
           orderBy: { orderIndex: 'asc' },
           include: {
             question: {
-              include: { options: { orderBy: { orderIndex: 'asc' } } },
+              include: { 
+                versions: {
+                  orderBy: { versionNumber: 'desc' },
+                  take: 1,
+                  include: { options: { orderBy: { orderIndex: 'asc' } } }
+                } 
+              },
             },
           },
         },
@@ -195,7 +201,7 @@ export class ExamsService {
     if (exam.endTime && now > exam.endTime) throw new ForbiddenException('Exam scheduling has ended.');
 
     // Count attempts
-    const attemptCount = await this.prisma.attempt.count({
+    const attemptCount = await this.prisma.examAttempt.count({
       where: { examId, studentId: currentUser.id },
     });
 
@@ -204,10 +210,11 @@ export class ExamsService {
     }
 
     // Start fresh attempt record
-    const attempt = await this.prisma.attempt.create({
+    const attempt = await this.prisma.examAttempt.create({
       data: {
         examId,
         studentId: currentUser.id,
+        organizationId: exam.organizationId,
         attemptNumber: attemptCount + 1,
         status: AttemptStatus.IN_PROGRESS,
         startTime: now,
@@ -241,7 +248,13 @@ export class ExamsService {
           include: {
             question: {
               include: {
-                options: { orderBy: { orderIndex: 'asc' } },
+                versions: {
+                  orderBy: { versionNumber: 'desc' },
+                  take: 1,
+                  include: {
+                    options: { orderBy: { orderIndex: 'asc' } },
+                  }
+                },
               },
             },
           },
@@ -253,17 +266,18 @@ export class ExamsService {
 
     let questions = exam.examQuestions.map((eq) => {
       const q = eq.question;
+      const v = q.versions?.[0];
       return {
         id: q.id,
-        text: q.text,
-        type: q.type,
-        points: eq.pointsOverride ?? q.points,
-        options: q.options.map((o) => ({
+        text: v?.text,
+        type: v?.type,
+        points: eq.pointsOverride ?? v?.points,
+        options: v?.options?.map((o) => ({
           id: o.id,
           text: o.text,
           orderIndex: o.orderIndex,
           ...(sanitize ? {} : { isCorrect: o.isCorrect }), // Hide correct answers for students
-        })),
+        })) ?? [],
       };
     });
 
@@ -277,17 +291,18 @@ export class ExamsService {
         .sort((a,b) => a.orderIndex - b.orderIndex)
         .map(eq => {
           const q = eq.question;
+          const v = q.versions?.[0];
           return {
             id: q.id,
-            text: q.text,
-            type: q.type,
-            points: eq.pointsOverride ?? q.points,
-            options: q.options.map((o) => ({
+            text: v?.text,
+            type: v?.type,
+            points: eq.pointsOverride ?? v?.points,
+            options: v?.options?.map((o) => ({
               id: o.id,
               text: o.text,
               orderIndex: o.orderIndex,
               ...(sanitize ? {} : { isCorrect: o.isCorrect }),
-            })),
+            })) ?? [],
           };
         });
     }

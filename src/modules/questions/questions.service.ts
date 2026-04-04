@@ -8,7 +8,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateQuestionDto } from './dto/create-question.dto';
 import { UpdateQuestionDto } from './dto/update-question.dto';
 import { QuestionQueryDto } from './dto/question-query.dto';
-import { Prisma, QuestionType, Role } from '@prisma/client';
+import { Prisma, QuestionType, Role, QuestionDifficulty } from '@prisma/client';
 
 @Injectable()
 export class QuestionsService {
@@ -34,31 +34,53 @@ export class QuestionsService {
     // Validate options based on question type
     this.validateOptions(dto);
 
-    const question = await this.prisma.question.create({
-      data: {
-        organizationId,
-        createdById: currentUser.id,
-        type: dto.type,
-        text: dto.text,
-        points: dto.points ?? 1.0,
-        difficulty: dto.difficulty ?? 1,
-        subject: dto.subject,
-        topic: dto.topic,
-        tags: dto.tags ?? [],
-        ...(dto.options?.length && {
-          options: {
-            create: dto.options.map((opt, i) => ({
-              text: opt.text,
-              isCorrect: opt.isCorrect,
-              orderIndex: opt.orderIndex ?? i,
-            })),
+    const question = await this.prisma.$transaction(async (prisma) => {
+      const q = await prisma.question.create({
+        data: {
+          organizationId,
+          createdById: currentUser.id,
+          difficulty: dto.difficulty ?? QuestionDifficulty.MEDIUM,
+          subject: dto.subject,
+          topic: dto.topic,
+          tags: dto.tags ?? [],
+        },
+      });
+
+      const version = await prisma.questionVersion.create({
+        data: {
+          questionId: q.id,
+          createdById: currentUser.id,
+          type: dto.type,
+          text: dto.text,
+          points: dto.points ?? 1.0,
+          versionNumber: 1,
+          ...(dto.options?.length && {
+            options: {
+              create: dto.options.map((opt, i) => ({
+                text: opt.text,
+                isCorrect: opt.isCorrect,
+                orderIndex: opt.orderIndex ?? i,
+              })),
+            },
+          }),
+        },
+        include: {
+          options: { orderBy: { orderIndex: 'asc' } },
+        },
+      });
+
+      return prisma.question.update({
+        where: { id: q.id },
+        data: { currentVersionId: version.id },
+        include: {
+          versions: {
+            orderBy: { versionNumber: 'desc' },
+            take: 1,
+            include: { options: { orderBy: { orderIndex: 'asc' } } },
           },
-        }),
-      },
-      include: {
-        options: { orderBy: { orderIndex: 'asc' } },
-        createdBy: { select: { id: true, firstName: true, lastName: true } },
-      },
+          createdBy: { select: { id: true, firstName: true, lastName: true } },
+        },
+      });
     });
 
     // TODO: Audit Log -> Action: CREATE_QUESTION, Target: question.id, Actor: currentUser.id
@@ -94,7 +116,9 @@ export class QuestionsService {
       where.organizationId = organizationId;
     }
 
-    if (type) where.type = type;
+    if (type) {
+      where.versions = { some: { type } };
+    }
     if (difficulty) where.difficulty = difficulty;
 
     if (subject) {
@@ -111,7 +135,7 @@ export class QuestionsService {
 
     if (search) {
       where.OR = [
-        { text: { contains: search, mode: 'insensitive' } },
+        { versions: { some: { text: { contains: search, mode: 'insensitive' } } } },
         { subject: { contains: search, mode: 'insensitive' } },
         { topic: { contains: search, mode: 'insensitive' } },
       ];
@@ -124,7 +148,11 @@ export class QuestionsService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
-          options: { orderBy: { orderIndex: 'asc' } },
+          versions: {
+            orderBy: { versionNumber: 'desc' },
+            take: 1,
+            include: { options: { orderBy: { orderIndex: 'asc' } } },
+          },
           createdBy: { select: { id: true, firstName: true, lastName: true } },
           _count: { select: { answers: true, examQuestions: true } },
         },
@@ -151,7 +179,11 @@ export class QuestionsService {
     const question = await this.prisma.question.findUnique({
       where: { id },
       include: {
-        options: { orderBy: { orderIndex: 'asc' } },
+        versions: {
+          orderBy: { versionNumber: 'desc' },
+          take: 1,
+          include: { options: { orderBy: { orderIndex: 'asc' } } },
+        },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
         _count: { select: { answers: true, examQuestions: true } },
       },
@@ -171,43 +203,76 @@ export class QuestionsService {
     const question = await this.findOne(id, currentUser);
     this.assertCanManageQuestions(currentUser);
 
-    // Validate options against the final merged type
-    const mergedType = dto.type ?? question.type;
+    const latestVersion = question.versions[0];
+    const mergedType = dto.type ?? latestVersion.type;
     const mergedOptions = dto.options !== undefined ? dto.options : undefined;
     if (mergedOptions !== undefined || dto.type) {
       this.validateOptions({ type: mergedType, options: mergedOptions } as any);
     }
 
-    const updated = await this.prisma.question.update({
+    // Update top-level
+    await this.prisma.question.update({
       where: { id },
       data: {
-        ...(dto.text !== undefined && { text: dto.text }),
-        ...(dto.type !== undefined && { type: dto.type }),
-        ...(dto.points !== undefined && { points: dto.points }),
         ...(dto.difficulty !== undefined && { difficulty: dto.difficulty }),
         ...(dto.subject !== undefined && { subject: dto.subject }),
         ...(dto.topic !== undefined && { topic: dto.topic }),
         ...(dto.tags !== undefined && { tags: dto.tags }),
-        // Full option replacement: delete old, create new
-        ...(dto.options !== undefined && {
-          options: {
-            deleteMany: {},
-            create: dto.options.map((opt, i) => ({
-              text: opt.text,
-              isCorrect: opt.isCorrect,
-              orderIndex: opt.orderIndex ?? i,
-            })),
-          },
-        }),
-      },
-      include: {
-        options: { orderBy: { orderIndex: 'asc' } },
-        createdBy: { select: { id: true, firstName: true, lastName: true } },
       },
     });
 
-    // TODO: Audit Log -> Action: UPDATE_QUESTION, Target: id, Actor: currentUser.id
-    return updated;
+    if (dto.text !== undefined || dto.type !== undefined || dto.points !== undefined || dto.options !== undefined) {
+      const newVersion = await this.prisma.questionVersion.create({
+        data: {
+          questionId: question.id,
+          createdById: currentUser.id,
+          type: dto.type ?? latestVersion.type,
+          text: dto.text ?? latestVersion.text,
+          points: dto.points ?? latestVersion.points,
+          versionNumber: latestVersion.versionNumber + 1,
+          ...(dto.options !== undefined 
+            ? {
+                options: {
+                  create: dto.options.map((opt, i) => ({
+                    text: opt.text,
+                    isCorrect: opt.isCorrect,
+                    orderIndex: opt.orderIndex ?? i,
+                  })),
+                },
+              }
+            : {
+                options: {
+                  create: latestVersion.options.map((opt) => ({
+                    text: opt.text,
+                    isCorrect: opt.isCorrect,
+                    orderIndex: opt.orderIndex,
+                  }))
+                }
+              }
+          ),
+        },
+        include: {
+          options: { orderBy: { orderIndex: 'asc' } }
+        }
+      });
+      // update currentVersionId
+      await this.prisma.question.update({
+        where: { id },
+        data: { currentVersionId: newVersion.id }
+      });
+    }
+
+    return this.prisma.question.findUnique({
+      where: { id },
+      include: {
+        versions: {
+          orderBy: { versionNumber: 'desc' },
+          take: 1,
+          include: { options: { orderBy: { orderIndex: 'asc' } } },
+        },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
   }
 
   // ─────────────────────────────────────────────

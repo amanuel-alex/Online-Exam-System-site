@@ -53,7 +53,7 @@ export class CertificateService {
       include: { 
         user: { select: { firstName: true, lastName: true } },
         exam: { select: { title: true } },
-        result: { select: { totalScore: true, percentage: true, issuedAt: true } }
+        result: { select: { totalScore: true, percentage: true } }
       },
     });
 

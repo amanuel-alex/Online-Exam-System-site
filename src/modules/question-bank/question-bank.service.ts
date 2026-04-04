@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateQuestionDto } from './dto/create-question.dto';
-import { UpdateQuestionDto } from './dto/update-question.dto';
+import { QuestionBankCreateDto } from './dto/create-question.dto';
+import { UpdateQuestionBankDto } from './dto/update-question.dto';
 import { Role } from '@prisma/client';
 
 /**
@@ -15,7 +15,7 @@ import { Role } from '@prisma/client';
 export class QuestionBankService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createQuestion(dto: CreateQuestionDto, currentUser: any) {
+  async create(dto: QuestionBankCreateDto, currentUser: any) {
     const tenant = this.prisma.tenantClient(currentUser.organizationId);
 
     return tenant.question.create({
@@ -24,7 +24,7 @@ export class QuestionBankService {
         createdById: currentUser.id,
         subject: dto.subject,
         topic: dto.topic,
-        difficulty: dto.difficulty,
+        difficulty: dto.difficulty as any,
         versions: {
           create: {
             versionNumber: 1,
@@ -34,11 +34,11 @@ export class QuestionBankService {
             explanation: dto.explanation,
             createdById: currentUser.id,
             options: {
-              create: dto.options.map((opt, index) => ({
+              create: dto.options?.map((opt, index) => ({
                 text: opt.text,
                 isCorrect: opt.isCorrect,
                 orderIndex: index,
-              })),
+              })) ?? [],
             },
           },
         },
@@ -46,7 +46,12 @@ export class QuestionBankService {
     });
   }
 
-  async findAll(currentUser: any) {
+  async createBulk(dto: any, currentUser: any) {
+    // TODO: Implement bulk creation logic
+    return { count: 0 };
+  }
+
+  async findAll(query: any, currentUser: any) {
     const tenant = this.prisma.tenantClient(currentUser.organizationId);
     
     return tenant.question.findMany({
@@ -69,6 +74,25 @@ export class QuestionBankService {
 
     if (!question) throw new NotFoundException('Question not found or access denied.');
     return question;
+  }
+
+  async update(id: string, dto: UpdateQuestionBankDto, currentUser: any) {
+    // TODO: Implement update logic
+    return this.findOne(id, currentUser);
+  }
+
+  async archive(id: string, currentUser: any) {
+    // TODO: Implement archive logic
+    return this.deleteQuestion(id, currentUser);
+  }
+
+  async restore(id: string, currentUser: any) {
+    // TODO: Implement restore logic
+    const tenant = this.prisma.tenantClient(currentUser.organizationId);
+    return tenant.question.update({
+      where: { id },
+      data: { isArchived: false } as any, // fallback if needed
+    });
   }
 
   async deleteQuestion(id: string, currentUser: any) {

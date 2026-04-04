@@ -141,7 +141,7 @@ export class ExamAttemptService {
         where: { attemptId_questionId: { attemptId, questionId: dto.questionId } },
         update: {
           textAnswer: dto.textAnswer,
-          selectedOptions: dto.selectedOptions || [],
+          selectedOptions: (dto as any).selectedOptions || [],
           fileUrl: dto.fileUrl,
           versionId, 
         },
@@ -150,7 +150,7 @@ export class ExamAttemptService {
           questionId: dto.questionId,
           versionId,
           textAnswer: dto.textAnswer,
-          selectedOptions: dto.selectedOptions || [],
+          selectedOptions: (dto as any).selectedOptions || [],
           fileUrl: dto.fileUrl,
         },
       });
@@ -175,6 +175,19 @@ export class ExamAttemptService {
     }
 
     return attempt;
+  }
+
+  async getRemainingTime(id: string, currentUser: any) {
+    const attempt = await this.getValidatedActiveAttempt(id, currentUser);
+    const now = new Date();
+    const startTime = new Date(attempt.startTime);
+    const deadline = attempt.exam.durationMinutes 
+      ? new Date(startTime.getTime() + attempt.exam.durationMinutes * 60000)
+      : attempt.exam.endTime;
+      
+    if (!deadline) return { remainingSeconds: null };
+    const remainingSeconds = Math.max(0, Math.floor((deadline.getTime() - now.getTime()) / 1000));
+    return { remainingSeconds };
   }
 
   private assertStudentAccess(attempt: any, currentUser: any) {

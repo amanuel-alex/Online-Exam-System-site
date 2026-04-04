@@ -13,7 +13,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { QuestionType } from '@prisma/client';
+import { QuestionType, QuestionDifficulty } from '@prisma/client';
 import { CreateOptionDto } from './create-option.dto';
 
 export class CreateQuestionDto {
@@ -29,14 +29,9 @@ export class CreateQuestionDto {
   @IsOptional()
   points?: number;
 
-  /**
-   * Difficulty on a scale of 1 (easiest) to 5 (hardest).
-   */
-  @IsInt()
-  @Min(1)
-  @Max(5)
+  @IsEnum(QuestionDifficulty)
   @IsOptional()
-  difficulty?: number;
+  difficulty?: QuestionDifficulty;
 
   @IsString()
   @IsOptional()

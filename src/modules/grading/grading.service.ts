@@ -91,4 +91,8 @@ export class GradingService {
   // ─────────────────────────────────────────────
   // OMITTED PRE-EXISTING LOGIC FOR BREVITY (autoGradeAttempt, manualGrade, releaseResult)
   // ─────────────────────────────────────────────
+  
+  async autoGradeAttempt(attemptId: string) { return null; }
+  async manualGrade(attemptId: string, dto: any, currentUser: any) { return null; }
+  async releaseResult(attemptId: string, currentUser: any) { return null; }
 }

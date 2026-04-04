@@ -6,6 +6,7 @@ import {
   IsNumber,
   IsArray,
   IsNotEmpty,
+  IsBoolean,
   Min,
   Max,
   ValidateNested,
@@ -27,8 +28,6 @@ export class CreateOptionDto {
   @IsOptional()
   orderIndex?: number;
 }
-
-import { IsBoolean } from 'class-validator';
 
 export class QuestionBankCreateDto {
   @IsEnum(QuestionType)
