@@ -179,6 +179,7 @@ export class UsersService {
       lastName: true,
       role: true,
       organizationId: true,
+      verificationStatus: true,
       isActive: true,
       createdAt: true,
       updatedAt: true,

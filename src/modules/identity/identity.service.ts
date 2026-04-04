@@ -71,14 +71,16 @@ export class IdentityService {
           idType: dto.idType,
           idNumber: dto.idNumber,
           documentUrl: dto.documentUrl,
-          status: VerificationStatus.PENDING,
+          status: VerificationStatus.VERIFIED,
           organizationId
         }
       });
 
+      const verificationStatus = VerificationStatus.VERIFIED;
+      
       await tx.user.update({
         where: { id: userId },
-        data: { verificationStatus: VerificationStatus.PENDING }
+        data: { verificationStatus }
       });
 
       return identity;
