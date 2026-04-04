@@ -118,10 +118,10 @@ export class IdentityService {
     });
   }
 
-  async findAllPending(organizationId: string) {
+  async findAllPending(organizationId?: string) {
     return this.prisma.userIdentity.findMany({
       where: { 
-        organizationId,
+        ...(organizationId && { organizationId }),
         status: VerificationStatus.PENDING 
       },
       include: { user: true }
