@@ -119,14 +119,25 @@ export class AnalyticsService {
   // ─────────────────────────────────────────────
 
   async getOrgAnalytics(currentUser: any, providedOrgId?: string) {
-    const organizationId = currentUser.role === Role.SYSTEM_ADMIN ? providedOrgId : currentUser.organizationId;
+    let organizationId = currentUser.role === Role.SYSTEM_ADMIN ? providedOrgId : currentUser.organizationId;
+    
+    // Fallback for SYSTEM_ADMIN if no ID provided via query
+    if (currentUser.role === Role.SYSTEM_ADMIN && !organizationId) {
+      const firstOrg = await this.prisma.organization.findFirst({ orderBy: { createdAt: 'asc' } });
+      organizationId = firstOrg?.id;
+    }
+
     if (!organizationId) throw new BadRequestException('Organization ID missing.');
 
     const [totalExams, totalStudents, totalAttempts, results] = await Promise.all([
       this.prisma.exam.count({ where: { organizationId } }),
       this.prisma.user.count({ where: { organizationId, role: Role.STUDENT } }),
       this.prisma.examAttempt.count({ where: { exam: { organizationId } } }),
-      this.prisma.result.findMany({ where: { attempt: { exam: { organizationId } } } })
+      this.prisma.result.findMany({ 
+        where: { attempt: { exam: { organizationId } } },
+        orderBy: { createdAt: 'desc' },
+        take: 50
+      })
     ]);
 
     const passRate = results.length > 0 
@@ -141,7 +152,7 @@ export class AnalyticsService {
         totalAttempts,
         avgPassRate: passRate,
       },
-      recentResults: results.slice(-5) // Basic recent activity
+      recentResults: results.slice(0, 5) // Return newest 5
     };
   }
 
