@@ -29,7 +29,7 @@ import { IdentityModule } from './modules/identity/identity.module';
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{
       ttl: 60000,
-      limit: 100,
+      limit: 500, // Increased for development and rapid navigating
     }]),
     PrismaModule,
     AuthModule,
