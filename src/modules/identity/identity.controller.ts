@@ -37,8 +37,10 @@ export class IdentityController {
   @UseGuards(RolesGuard)
   @Roles(Role.SYSTEM_ADMIN, Role.ORG_ADMIN, Role.EXAMINER)
   async getPending(@CurrentUser() user: any) {
-    // SYSTEM_ADMIN doesn't need an org context, they see everything OR it falls back to first org
-    if (user.role !== Role.SYSTEM_ADMIN && !user.organizationId) {
+    console.log('DEBUG: User in getPending:', { id: user.id, role: user.role, orgId: user.organizationId });
+    
+    // SYSTEM_ADMIN doesn't need an org context
+    if (user.role !== 'SYSTEM_ADMIN' && !user.organizationId) {
       throw new BadRequestException('Organization ID missing from user context.');
     }
     return this.identityService.findAllPending(user.organizationId);
