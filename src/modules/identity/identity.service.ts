@@ -11,8 +11,34 @@ export class IdentityService {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new NotFoundException('User not found');
 
-    const organizationId = dto.organizationId || user.organizationId;
-    if (!organizationId) throw new BadRequestException('Organization context missing.');
+    let organizationId = dto.organizationId || user.organizationId;
+
+    // Fallback: if user has no org yet, use the first org in the system (or create one)
+    if (!organizationId) {
+      let defaultOrg = await this.prisma.organization.findFirst({
+        orderBy: { createdAt: 'asc' }
+      });
+      
+      if (!defaultOrg) {
+        // Auto-create a default institution if none exists
+        defaultOrg = await this.prisma.organization.create({
+          data: {
+            name: 'Default Institution',
+            slug: 'default-institution',
+            type: 'UNIVERSITY',
+            isActive: true
+          }
+        });
+      }
+      
+      organizationId = defaultOrg.id;
+
+      // Assign user to this org so future calls work
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { organizationId }
+      });
+    }
 
     // Check if identity already exists for this user
     const existingIdentity = await this.prisma.userIdentity.findUnique({

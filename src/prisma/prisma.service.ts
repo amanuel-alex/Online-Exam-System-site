@@ -103,6 +103,33 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async onModuleInit() {
     await this.$connect();
+
+    // Auto-seed admin user for development/initial setup
+    try {
+      const adminEmail = 'admin@examina.com';
+      const existingAdmin = await this.user.findUnique({ where: { email: adminEmail } });
+      
+      if (!existingAdmin) {
+        console.log('🌱 No admin found. Seeding system administrator...');
+        const bcrypt = require('bcrypt');
+        const passwordHash = await bcrypt.hash('Password123!', 10);
+        
+        await this.user.create({
+          data: {
+            email: adminEmail,
+            passwordHash,
+            firstName: 'System',
+            lastName: 'Admin',
+            role: 'SYSTEM_ADMIN',
+            verificationStatus: 'VERIFIED',
+            isActive: true
+          }
+        });
+        console.log('✅ Admin User Created: admin@examina.com / Password123!');
+      }
+    } catch (err) {
+      console.error('❌ Failed to seed admin user:', err);
+    }
   }
 
   async onModuleDestroy() {
