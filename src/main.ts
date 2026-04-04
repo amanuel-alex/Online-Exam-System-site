@@ -2,12 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe, VersioningType } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // 1. API Versioning (URI based: /api/v1/...)
+  // 0. Security Headers
+  app.use(helmet());
   // This ensures future upgrades like /api/v2/ won't break existing national clients.
   app.setGlobalPrefix('api');
   app.enableVersioning({

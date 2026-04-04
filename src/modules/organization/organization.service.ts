@@ -35,6 +35,7 @@ export class OrganizationService {
         type: createDto.type,
         settings: createDto.settings as Prisma.InputJsonValue ?? Prisma.JsonNull,
         metadata: createDto.metadata as Prisma.InputJsonValue ?? Prisma.JsonNull,
+        region: createDto.region,
       },
     });
 
@@ -141,6 +142,7 @@ export class OrganizationService {
         ...(typeof updateDto.isActive === 'boolean' && { isActive: updateDto.isActive }),
         ...(updateDto.settings !== undefined && { settings: updateDto.settings as Prisma.InputJsonValue }),
         ...(updateDto.metadata !== undefined && { metadata: updateDto.metadata as Prisma.InputJsonValue }),
+        ...(updateDto.region && { region: updateDto.region }),
       },
     });
 

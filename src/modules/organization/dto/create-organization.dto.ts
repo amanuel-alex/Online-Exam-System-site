@@ -24,4 +24,8 @@ export class CreateOrganizationDto {
   @IsObject()
   @IsOptional()
   metadata?: Record<string, any>;
+
+  @IsString()
+  @IsOptional()
+  region?: string;
 }

@@ -108,6 +108,13 @@ model Organization {
   questions Question[] // Link questions to the organization (question bank)
 
   webhooks  WebhookConfig[]
+  results   Result[]
+  attempts  ExamAttempt[]
+  certificates Certificate[]
+  notifications Notification[]
+  auditLogs    AuditLog[]
+  identities   UserIdentity[]
+  configs      OrganizationConfig[]
 
   @@index([slug])
   @@index([isActive])
@@ -150,6 +157,12 @@ model User {
   sessionsCreated  ExamSession[]
   sessionEnrols    ExamSessionUser[]
 
+  // Back-relations for missing fields
+  createdVersions QuestionVersion[]
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  idempotencyKeys IdempotencyKey[]
+
   @@index([email])
   @@index([organizationId])
   @@index([role])
@@ -161,6 +174,7 @@ model Question {
   organizationId String
   organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdById    String
+  createdBy      User               @relation("QuestionCreator", fields: [createdById], references: [id])
   explanation    String?            @db.Text
   isArchived     Boolean            @default(false)
   
@@ -218,14 +232,6 @@ model QuestionVersion {
   @@unique([questionId, versionNumber])
   @@index([questionId])
 }
-
-  @@index([organizationId])
-  @@index([type])
-  @@index([difficulty])
-  @@index([subject])
-  @@index([isArchived])
-}
-
 model Option {
   id                String          @id @default(uuid())
   questionId        String?         // Legacy

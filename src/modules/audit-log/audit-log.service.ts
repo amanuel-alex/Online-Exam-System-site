@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { createHash } from 'crypto';
+import { Role } from '@prisma/client';
 
 @Injectable()
 export class AuditLogService {
@@ -55,6 +56,76 @@ export class AuditLogService {
   }
 
   /**
+   * Forensic Retrieval with Multi-Tenant Scoping
+   */
+  async findAll(query: any, currentUser: any) {
+    const { 
+      page = 1, 
+      limit = 10, 
+      action, 
+      resourceType, 
+      resourceId, 
+      userId, 
+      organizationId,
+      startDate,
+      endDate
+    } = query;
+    
+    const skip = (Number(page) - 1) * Number(limit);
+    const where: any = {};
+
+    // Hierarchical Access Control
+    // System Admins can see everything or filter by org.
+    // Org Admins are strictly locked to their own organization's logs.
+    if (currentUser.role !== Role.SYSTEM_ADMIN) {
+      where.organizationId = currentUser.organizationId;
+    } else if (organizationId) {
+      where.organizationId = organizationId;
+    }
+
+    if (action) where.action = action;
+    if (resourceType) where.resourceType = resourceType;
+    if (resourceId) where.resourceId = resourceId;
+    if (userId) where.userId = userId;
+
+    if (startDate || endDate) {
+      where.timestamp = {};
+      if (startDate) where.timestamp.gte = new Date(startDate);
+      if (endDate) where.timestamp.lte = new Date(endDate);
+    }
+
+    const [logs, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where,
+        skip: skip,
+        take: Number(limit),
+        orderBy: { timestamp: 'desc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+
+    return {
+      data: logs,
+      meta: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(total / Number(limit)),
+      },
+    };
+  }
+
+  /**
    * Compliance Validation
    */
   async verifyIntegrity(logId: string): Promise<boolean> {
@@ -69,3 +140,4 @@ export class AuditLogService {
     return log.entryHash === expected;
   }
 }
+

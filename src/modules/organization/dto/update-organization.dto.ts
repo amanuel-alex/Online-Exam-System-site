@@ -30,4 +30,8 @@ export class UpdateOrganizationDto {
   @IsObject()
   @IsOptional()
   metadata?: Record<string, any>;
+
+  @IsString()
+  @IsOptional()
+  region?: string;
 }

@@ -49,13 +49,13 @@ export class NationalAnalyticsService {
 
     // Grouping & Aggregation Logic for Regional Clusters
     const report: Record<string, any> = {};
-    regions.forEach(org => {
+    regions.forEach((org: any) => {
       const r = org.region || 'UNKNOWN';
       if (!report[ r]) report[ r] = { totalResults: 0, passed: 0, avgScore: 0 };
       
-      report[ r].totalResults += org._count.results;
-      report[ r].passed += org.results.filter(res => res.isPassed).length;
-      report[ r].avgScore += org.results.reduce((s, curr) => s + curr.percentage, 0);
+      report[ r].totalResults += org._count?.results || 0;
+      report[ r].passed += (org.results || []).filter((res: any) => res.isPassed).length;
+      report[ r].avgScore += (org.results || []).reduce((s: any, curr: any) => s + curr.percentage, 0);
     });
 
     return report;
@@ -78,7 +78,7 @@ export class NationalAnalyticsService {
           select: { id: true }
         }
       }
-    });
+    }) as any;
   }
 
   private ensureSystemAdmin(user: any) {
