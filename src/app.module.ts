@@ -22,6 +22,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { RequestLoggerInterceptor } from './common/interceptors/request-logger.interceptor';
 import { ProctoringModule } from './modules/proctoring/proctoring.module';
+import { IdentityModule } from './modules/identity/identity.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { ProctoringModule } from './modules/proctoring/proctoring.module';
     CacheModule,
     QueueModule,
     ProctoringModule,
+    IdentityModule,
   ],
   controllers: [AppController],
   providers: [
