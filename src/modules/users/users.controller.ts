@@ -64,6 +64,17 @@ export class UsersController {
     return this.usersService.deactivate(id, currentUser);
   }
 
+  @Patch('me/password')
+  changeMyPassword(@Body() changePasswordDto: any, @CurrentUser() currentUser: any) {
+    return this.usersService.changePassword(currentUser.id, changePasswordDto);
+  }
+
+  @Post('bulk-import')
+  @Roles(Role.ORG_ADMIN) 
+  bulkImport(@Body('csvContent') csvContent: string, @CurrentUser() currentUser: any) {
+    return this.usersService.bulkImportStudents(currentUser.organizationId, csvContent);
+  }
+
   @Patch(':id/activate')
   @Roles(Role.SYSTEM_ADMIN, Role.ORG_ADMIN)
   @Permissions('update:user')

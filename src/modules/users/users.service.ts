@@ -6,6 +6,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UsersQueryDto } from './dto/users-query.dto';
 import * as bcrypt from 'bcrypt';
 import { Prisma, Role } from '@prisma/client';
+import { parse } from 'csv-parse/sync';
 
 @Injectable()
 export class UsersService {
@@ -39,14 +40,76 @@ export class UsersService {
         firstName: createUserDto.firstName,
         lastName: createUserDto.lastName,
         role: createUserDto.role,
+        studentId: createUserDto.studentId,
         organizationId: createUserDto.organizationId,
         isActive: createUserDto.isActive ?? true,
-      },
+        isFirstLogin: true,
+      } as any,
       select: this.getUserSelect(),
     });
 
     // TODO: Audit Log -> Action: CREATE_USER, Target: newUser.id, Actor: currentUser.id
     return newUser;
+  }
+
+  async bulkImportStudents(organizationId: string, csvContent: string) {
+    const records = parse(csvContent, { 
+      columns: true, 
+      skip_empty_lines: true,
+      trim: true 
+    });
+
+    const results = {
+      success: 0,
+      failed: 0,
+      errors: [] as any[]
+    };
+
+    for (const record of records as any[]) {
+      try {
+        const { name, email, studentId } = record;
+        if (!name || !email) {
+          throw new Error('Name and email are required');
+        }
+
+        // Split name into first and last
+        const nameParts = name.trim().split(' ');
+        const firstName = nameParts[0];
+        const lastName = nameParts.slice(1).join(' ') || 'Student';
+
+        // Check unique email system-wide
+        const existingEmail = await this.prisma.user.findUnique({ where: { email } });
+        if (existingEmail) {
+          throw new Error(`Email ${email} already exists`);
+        }
+
+        // Default password (e.g., studentId or a random one)
+        const password = studentId || 'ChangeMe123!';
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        await this.prisma.user.create({
+          data: {
+            email,
+            passwordHash: hashedPassword,
+            firstName,
+            lastName,
+            studentId,
+            role: Role.STUDENT,
+            organizationId,
+            isFirstLogin: true,
+            verificationStatus: 'NOT_SUBMITTED',
+            isActive: true
+          } as any
+        });
+
+        results.success++;
+      } catch (err: any) {
+        results.failed++;
+        results.errors.push({ record, message: err.message });
+      }
+    }
+
+    return results;
   }
 
   async findAll(queryDto: UsersQueryDto, currentUser: any) {
@@ -181,7 +244,7 @@ export class UsersService {
       data: {
         passwordHash: hashedPassword,
         isFirstLogin: false,
-      },
+      } as any,
       select: this.getUserSelect(),
     });
   }
