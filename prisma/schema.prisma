@@ -140,6 +140,8 @@ model User {
 
   isTwoFactorEnabled Boolean   @default(false)
   twoFactorSecret    String?
+  isFirstLogin       Boolean   @default(true)
+  studentId          String?
 
   identitiesToVerify UserIdentity[] @relation("IdentityVerifier")
   reviewedVersions   QuestionVersion[] @relation("VersionReviewer")
@@ -169,6 +171,7 @@ model User {
   @@index([organizationId])
   @@index([role])
   @@index([deletedAt])
+  @@unique([organizationId, studentId])
 }
 
 model Question {

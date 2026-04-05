@@ -162,13 +162,28 @@ export class UsersService {
     await this.findOne(id, currentUser);
 
     const user = await this.prisma.user.update({
-      where: { id },
+      where: { id: id },
       data: { isActive: true },
       select: this.getUserSelect(),
     });
 
     // TODO: Audit Log -> Action: ACTIVATE_USER, Target: id
     return user;
+  }
+
+  async changePassword(id: string, changePasswordDto: any) {
+    const { newPassword } = changePasswordDto;
+    const salt = await bcrypt.genSalt();
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    return this.prisma.user.update({
+      where: { id },
+      data: {
+        passwordHash: hashedPassword,
+        isFirstLogin: false,
+      },
+      select: this.getUserSelect(),
+    });
   }
 
   private getUserSelect() {
@@ -181,6 +196,8 @@ export class UsersService {
       organizationId: true,
       verificationStatus: true,
       isActive: true,
+      isFirstLogin: true,
+      studentId: true,
       createdAt: true,
       updatedAt: true,
     };

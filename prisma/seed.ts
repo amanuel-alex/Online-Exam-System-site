@@ -38,6 +38,8 @@ async function main() {
       firstName: 'System',
       lastName: 'Admin',
       role: Role.SYSTEM_ADMIN,
+      verificationStatus: 'VERIFIED',
+      isActive: true
     },
   });
 
@@ -51,6 +53,8 @@ async function main() {
       lastName: 'Admin',
       role: Role.ORG_ADMIN,
       organizationId: org.id,
+      verificationStatus: 'VERIFIED',
+      isActive: true
     },
   });
 
@@ -64,6 +68,8 @@ async function main() {
       lastName: 'Teacher',
       role: Role.TEACHER,
       organizationId: org.id,
+      verificationStatus: 'VERIFIED',
+      isActive: true
     },
   });
 
@@ -77,6 +83,23 @@ async function main() {
       lastName: 'Student',
       role: Role.STUDENT,
       organizationId: org.id,
+      verificationStatus: 'VERIFIED',
+      isActive: true
+    },
+  });
+
+  const examiner = await prisma.user.upsert({
+    where: { email: 'examiner@demo.com' },
+    update: {},
+    create: {
+      email: 'examiner@demo.com',
+      passwordHash,
+      firstName: 'Audit',
+      lastName: 'Examiner',
+      role: Role.EXAMINER,
+      organizationId: org.id,
+      verificationStatus: 'VERIFIED',
+      isActive: true
     },
   });
 
