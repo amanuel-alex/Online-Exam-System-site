@@ -1,0 +1,659 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ------------------------------------------------------
+// Enums
+// ------------------------------------------------------
+
+enum Role {
+  SYSTEM_ADMIN
+  ORG_ADMIN
+  TEACHER
+  EXAMINER
+  STUDENT
+}
+
+enum OrgType {
+  SCHOOL
+  UNIVERSITY
+  TVET
+  COC
+  NATIONAL
+  OTHER
+}
+
+enum QuestionType {
+  MCQ
+  TRUE_FALSE
+  ESSAY
+  FILE_UPLOAD
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+}
+
+enum QuestionDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  EXPERT
+}
+
+enum SessionStatus {
+  SCHEDULED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum Locale {
+  EN
+  AM
+  OM
+}
+
+enum VersionStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+// ------------------------------------------------------
+// Models
+// ------------------------------------------------------
+enum VerificationStatus {
+  NOT_SUBMITTED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum IdType {
+  NATIONAL_ID
+  PASSPORT
+  FAYDA
+  OTHER
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  type      OrgType  @default(OTHER)
+  isActive  Boolean  @default(true)
+  settings  Json?    // Structured: grading system, pass score, proctoring, exam types
+  branding  Json?    // { logoUrl: "...", colors: { primary: "#...", secondary: "#..." } }
+  gradingRules Json?   // { system: "PERCENTAGE", scale: [...], penaltyForWrong: 0 }
+  examRules   Json?    // { autoSubmit: true, allowRetakes: false, proctoringLevel: "HIGH" }
+  
+  region    String?    // Geographic metadata for regional reporting (e.g. "Addis Ababa")
+  
+  metadata  Json?    // Arbitrary extra data
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  users     User[]
+  exams     Exam[]
+  sessions  ExamSession[]
+  questions Question[] // Link questions to the organization (question bank)
+
+  webhooks  WebhookConfig[]
+  results   Result[]
+  attempts  ExamAttempt[]
+  certificates Certificate[]
+  notifications Notification[]
+  auditLogs    AuditLog[]
+  identities   UserIdentity[]
+  configs      OrganizationConfig[]
+  proctoringEvents ProctoringEvent[]
+
+  @@index([slug])
+  @@index([isActive])
+  @@index([deletedAt])
+}
+
+model User {
+  id             String        @id @default(uuid())
+  email          String        @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           Role          @default(STUDENT)
+  organizationId String?       // Nullable because System Admins don't belong to one org
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  isActive       Boolean       @default(true)
+  preferredLanguage Locale      @default(EN)
+
+  // Identity Verification (Fayda/National ID Ready)
+  verificationStatus VerificationStatus @default(NOT_SUBMITTED)
+  identity           UserIdentity?
+
+  isTwoFactorEnabled Boolean   @default(false)
+  twoFactorSecret    String?
+  isFirstLogin       Boolean   @default(true)
+  studentId          String?
+
+  identitiesToVerify UserIdentity[] @relation("IdentityVerifier")
+  reviewedVersions   QuestionVersion[] @relation("VersionReviewer")
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  createdExams     Exam[]        @relation("ExamCreator")
+  createdQuestions Question[]    @relation("QuestionCreator")
+  attempts         ExamAttempt[] @relation("StudentAttempts")
+  gradedAnswers    AttemptAnswer[] @relation("AnswerGrader")
+  results          Result[]
+  certificates     Certificate[] @relation("UserCertificates")
+  configUpdates    OrganizationConfig[] @relation("ConfigUpdater")
+  sessionsCreated  ExamSession[]
+  sessionEnrols    ExamSessionUser[]
+
+  // Back-relations for missing fields
+  createdVersions QuestionVersion[]
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  idempotencyKeys IdempotencyKey[]
+  proctoringEvents ProctoringEvent[]
+
+  @@index([email])
+  @@index([organizationId])
+  @@index([role])
+  @@index([deletedAt])
+  @@unique([organizationId, studentId])
+}
+
+model Question {
+  id             String             @id @default(uuid())
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User               @relation("QuestionCreator", fields: [createdById], references: [id])
+  explanation    String?            @db.Text
+  isArchived     Boolean            @default(false)
+  
+  difficulty     QuestionDifficulty @default(MEDIUM)
+  subject        String?            // e.g. "Mathematics", "History"
+  topic          String?            // e.g. "Algebra", "World War II"
+  tags           String[]           // Free-form tags for flexible filtering
+  
+  currentVersionId String?          @unique
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  deletedAt      DateTime?
+
+  versions      QuestionVersion[]
+  examQuestions ExamQuestion[]
+  answers       AttemptAnswer[]
+
+  @@index([organizationId])
+  @@index([subject])
+  @@index([isArchived])
+  @@index([deletedAt])
+}
+
+model QuestionVersion {
+  id             String             @id @default(uuid())
+  questionId     String
+  question       Question           @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  versionNumber  Int                @default(1)
+  status         VersionStatus      @default(DRAFT)
+  
+  reviewerId     String?
+  reviewer       User?              @relation("VersionReviewer", fields: [reviewerId], references: [id])
+  reviewComment  String?            @db.Text
+  reviewedAt     DateTime?
+  
+  language       Locale             @default(EN)
+  translationOfId String?
+  translationOf  QuestionVersion?   @relation("Translations", fields: [translationOfId], references: [id])
+  translations   QuestionVersion[]  @relation("Translations")
+
+  type           QuestionType
+  text           String             @db.Text
+  points         Float              @default(1.0)
+  explanation    String?            @db.Text
+  
+  createdById    String
+  createdBy      User               @relation(fields: [createdById], references: [id])
+  createdAt      DateTime           @default(now())
+
+  attachments    String[]           // List of URLs to media/PDFs
+  options        Option[]
+  examQuestions  ExamQuestion[]
+  answers        AttemptAnswer[]
+
+  @@unique([questionId, versionNumber])
+  @@index([questionId])
+}
+model Option {
+  id                String          @id @default(uuid())
+  questionId        String?         // Legacy
+  questionVersionId String
+  questionVersion   QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  text              String
+  isCorrect  Boolean  @default(false)
+  orderIndex Int      @default(0) // Control display order
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers AttemptAnswer[] // To track if a student selected this option
+
+  @@index([questionId])
+}
+
+model Exam {
+  id                 String       @id @default(uuid())
+  title              String
+  description        String?      @db.Text
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById        String
+  createdBy          User         @relation("ExamCreator", fields: [createdById], references: [id])
+  
+  // Settings
+  startTime          DateTime?
+  endTime            DateTime?
+  durationMinutes    Int?         // Overall exam timer limit
+  maxAttempts        Int          @default(1)
+  randomizeQuestions Boolean      @default(false)
+  isPublished        Boolean      @default(false)
+  passPercentage     Float        @default(50.0)
+
+  // Secure Exam Mode (SEB / Electron)
+  requireLockdown    Boolean      @default(false) 
+  sebConfig          Json?        // { browserExamKey: "...", configKey: "...", allowQuit: false }
+  
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  deletedAt          DateTime?
+
+  examQuestions ExamQuestion[]
+  sessions      ExamSession[]
+  attempts      ExamAttempt[]
+  certificates  Certificate[]
+  proctoringEvents ProctoringEvent[]
+
+  @@index([organizationId])
+  @@index([isPublished])
+  @@index([deletedAt])
+}
+
+model ExamQuestion {
+  id             String   @id @default(uuid())
+  examId         String
+  exam           Exam            @relation(fields: [examId], references: [id], onDelete: Cascade)
+  questionId     String
+  question       Question        @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  versionId      String?
+  version        QuestionVersion? @relation(fields: [versionId], references: [id])
+  orderIndex     Int      // Serves as ordering if randomizeQuestions is false
+  pointsOverride Float?   // Optional override for points on this specific exam
+
+  @@unique([examId, questionId])
+  @@index([examId])
+}
+
+model ExamAttempt {
+  id            String        @id @default(uuid())
+  examId        String
+  exam          Exam          @relation(fields: [examId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       User          @relation("StudentAttempts", fields: [studentId], references: [id], onDelete: Cascade)
+  
+  sessionId     String?
+  session       ExamSession?  @relation(fields: [sessionId], references: [id])
+  
+  attemptNumber Int           @default(1)
+  startTime     DateTime      @default(now())
+  endTime       DateTime?
+  status        AttemptStatus @default(IN_PROGRESS)
+  version       Int           @default(1) // Optimistic Locking field
+  
+  riskScore     Float         @default(0.0) // Fairness & Anomaly Detection
+  riskFlags     String[]      // E.g. ["TOO_FAST", "IDENTICAL_ANSWERS"]
+
+  // Device & Network Security
+  deviceId      String?       // Browser fingerprint or HWID
+  ipAddress     String?       // To detect geographical spoofing
+  
+  isOffline     Boolean       @default(false) // Optimized for rural sync sessions
+
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+
+  answers AttemptAnswer[]
+  result  Result?
+  proctoringEvents ProctoringEvent[]
+
+  @@unique([examId, studentId, attemptNumber]) // Prevent duplicate attempt numbers
+  @@index([examId])
+  @@index([studentId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model AttemptAnswer {
+  id         String   @id @default(uuid())
+  attemptId  String
+  attempt    ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  versionId  String?
+  version    QuestionVersion? @relation(fields: [versionId], references: [id])
+  
+  // Polymorphic-like storage based on question type
+  textAnswer      String?  @db.Text // Used for ESSAY
+  selectedOptions String[]           // Used for MCQ (support multiple selection)
+  optionId        String?           // Deprecated legacy field (keeping for compatibility)
+  option          Option?  @relation(fields: [optionId], references: [id])
+  fileUrl         String?           // Used for FILE_UPLOAD
+  
+  // Grading & Evaluation
+  isAutoGraded Boolean  @default(false)
+  score        Float?   
+  evalComment  String?  @db.Text
+  gradedById   String?
+  gradedBy     User?    @relation("AnswerGrader", fields: [gradedById], references: [id])
+
+  // Sync & Conflict Resolution
+  clientTimestamp DateTime @default(now())
+  syncedAt        DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  @@unique([attemptId, questionId]) // A student has one definitive answer per question per attempt
+  @@index([attemptId])
+  @@index([questionId])
+  @@index([deletedAt])
+}
+
+model Result {
+  id         String      @id @default(uuid())
+  attemptId  String      @unique
+  attempt    ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  studentId  String
+  student    User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  totalScore Float
+  maxScore   Float
+  percentage Float    // Stored physically for ultra-fast dashboard queries
+  isPassed   Boolean
+  isReleased Boolean  @default(false)
+  releasedAt DateTime?
+  
+  isLocked   Boolean  @default(false) // Prevents any further edits once finalized
+  verificationHash String?         // Cryptographic hash of (studentId + totalScore + attemptId)
+
+  certificate  Certificate?
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([studentId])
+  @@index([attemptId])
+  @@index([organizationId])
+  @@index([isPassed])
+  @@index([deletedAt])
+}
+
+model ExamSession {
+  id             String       @id @default(uuid())
+  title          String
+  examId         String
+  exam           Exam         @relation(fields: [examId], references: [id], onDelete: Cascade)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User         @relation(fields: [createdById], references: [id])
+  
+  startTime      DateTime
+  endTime        DateTime
+  
+  status         SessionStatus @default(SCHEDULED)
+  isPublic       Boolean       @default(false) // If true, anyone in the org can join. If false, only mapped users.
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  sessionUsers   ExamSessionUser[]
+  attempts       ExamAttempt[]
+
+  @@index([examId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model ExamSessionUser {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   ExamSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, userId])
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id])
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  
+  action         String   // e.g. "USER_LOGIN", "EXAM_UPDATED", "QUESTION_VERSIONED"
+  resourceType   String?  // e.g. "EXAM", "QUESTION", "USER", "CONFIG"
+  resourceId     String?  // The ID of the affected resource
+
+  originalValue  Json?    // State BEFORE the change
+  newValue       Json?    // State AFTER the change
+  
+  metadata       Json?    // Contextual data: { ip: "...", browser: "..." }
+  
+  // Legal Integrity Fields
+  userIp         String?
+  userAgent      String?
+  entryHash      String?  // SHA-256 hash of (action + timestamp + userId + secret)
+  
+  timestamp      DateTime @default(now())
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@index([timestamp])
+}
+
+model UserIdentity {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  idType         IdType
+  idNumber       String   @unique // Cryptographic index for uniqueness
+  
+  documentUrl    String?  // URL to the uploaded ID scan
+  metadata       Json?    // E.g. { expiryDate: "...", country: "ETH" }
+
+  status         VerificationStatus @default(PENDING)
+  
+  verifiedById   String?
+  verifiedBy     User?    @relation("IdentityVerifier", fields: [verifiedById], references: [id])
+  verifiedAt     DateTime?
+  rejectionReason String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([idNumber])
+  @@index([status])
+}
+
+model Certificate {
+  id             String   @id @default(uuid())
+  uniqueId       String   @unique // Publicly visible ID (e.g., EX-2024-XXXX)
+  
+  resultId       String   @unique
+  result         Result   @relation(fields: [resultId], references: [id])
+  
+  userId         String
+  user           User     @relation("UserCertificates", fields: [userId], references: [id])
+  
+  examId         String
+  exam           Exam     @relation(fields: [examId], references: [id])
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  issuedAt       DateTime @default(now())
+  
+  verificationHash String  // Anti-forgery cryptographic checksum
+  isRevoked       Boolean  @default(false)
+
+  @@index([uniqueId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title     String
+  message   String   @db.Text
+  type      String   // e.g. "EXAM_SCHEDULED", "RESULT_PUBLISHED", "ANNOUNCEMENT"
+  metadata  Json?    // Optional: { examId: "...", sessionId: "..." }
+  
+  isRead    Boolean  @default(false)
+  
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model IdempotencyKey {
+  key       String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  response  Json?    // Optional: Cache the first response to return to duplicates
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+enum WebhookEvent {
+  EXAM_COMPLETED
+  RESULT_PUBLISHED
+  USER_REGISTERED
+}
+
+model WebhookConfig {
+  id             String         @id @default(uuid())
+  organizationId String
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  url            String         // Destination URL (e.g., Moodle endpoint)
+  secret         String         // Secret key for HMAC signing
+  events         WebhookEvent[] // List of events to subscribe to
+  
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+
+  @@index([organizationId])
+}
+
+model OrganizationConfig {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  category       String       @default("GENERAL") // BRANDING, GRADING, EXAM_POLICY
+  key            String
+  value          Json
+  
+  updatedById    String?
+  updatedBy      User?        @relation("ConfigUpdater", fields: [updatedById], references: [id])
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@index([category])
+}
+
+enum ProctoringEventType {
+  TAB_SWITCH
+  WINDOW_BLUR
+  FULLSCREEN_EXIT
+  WEBCAM_SNAPSHOT
+  FACE_NOT_FOUND
+  MULTIPLE_FACES
+  DEVICE_CONFLICT
+  OTHER
+}
+
+model ProctoringEvent {
+  id             String             @id @default(uuid())
+  attemptId      String
+  attempt        ExamAttempt        @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  
+  userId         String
+  user           User               @relation(fields: [userId], references: [id])
+  
+  examId         String
+  exam           Exam               @relation(fields: [examId], references: [id])
+  
+  eventType      ProctoringEventType
+  metadata       Json?              // Contextual: browser, OS, duration, etc.
+  
+  timestamp      DateTime           @default(now())
+  
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id])
+
+  @@index([attemptId])
+  @@index([userId])
+  @@index([examId])
+  @@index([organizationId])
+  @@index([eventType])
+}
