@@ -84,8 +84,8 @@ Clients (Admin/Teacher/Student)
 
 ### Prerequisites
 
-- Node.js 18+
-- npm 9+
+- Node.js (Active LTS recommended)
+- npm (version bundled with your Node.js LTS installation)
 - PostgreSQL 15+ (or Docker)
 
 ### Installation
@@ -107,7 +107,7 @@ cp .env.example .env
 Set the required variables (adjust values per environment):
 
 ```env
-DATABASE_URL=postgresql://postgres:2123@localhost:5432/examSystem
+DATABASE_URL=postgresql://postgres:your-password@localhost:5432/examSystem
 PORT=3001
 FRONTEND_URL=http://localhost:3000
 NODE_ENV=development
@@ -123,6 +123,12 @@ AWS_SECRET_ACCESS_KEY=your-secret
 S3_PUBLIC_URL=https://your-bucket.s3.amazonaws.com
 ```
 
+For all secret values (`JWT_SECRET`, `JWT_REFRESH_SECRET`, `AUDIT_SECRET`, `RESULT_SECRET`, `CERTIFICATE_SECRET`), generate strong random values before deployment, for example:
+
+```bash
+openssl rand -base64 32
+```
+
 ### Run Locally
 
 Start PostgreSQL with Docker (optional):
@@ -135,7 +141,12 @@ Then run your preferred development start command (according to your local scrip
 
 ### Build for Production
 
-Build commands are not currently defined in the root `package.json`. Add/standardize build scripts before production packaging.
+Use standard Node/Nest production scripts once defined for this repository:
+
+```bash
+npm run build
+npm run start:prod
+```
 
 ### Deployment Notes
 
@@ -194,7 +205,7 @@ Contributions are welcome. Please:
 
 ## Code of Conduct
 
-Please contribute respectfully and constructively. A formal Code of Conduct file is not currently present; adding one (for example, Contributor Covenant) is recommended.
+Please contribute respectfully and constructively. Until a repository-specific policy is added, contributors are expected to follow the [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
 
 ## License
 
