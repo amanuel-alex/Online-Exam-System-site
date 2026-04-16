@@ -1,94 +1,75 @@
 # Online Exam System Site
 
-[![Build](https://img.shields.io/badge/build-not%20configured-lightgrey?logo=githubactions&logoColor=white)](https://github.com/amanuel-alex/Online-Exam-System-site/actions)
-[![License](https://img.shields.io/badge/license-no%20license%20specified-red)](#license)
-[![Last Commit](https://img.shields.io/github/last-commit/amanuel-alex/Online-Exam-System-site)](https://github.com/amanuel-alex/Online-Exam-System-site/commits)
+[![GitHub last commit](https://img.shields.io/github/last-commit/amanuel-alex/Online-Exam-System-site)](https://github.com/amanuel-alex/Online-Exam-System-site/commits)
+[![NestJS](https://img.shields.io/badge/NestJS-API%20Platform-ea2845?logo=nestjs&logoColor=white)](https://nestjs.com)
+[![Prisma](https://img.shields.io/badge/Prisma-ORM-2D3748?logo=prisma&logoColor=white)](https://www.prisma.io)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-316192?logo=postgresql&logoColor=white)](https://www.postgresql.org)
+[![License](https://img.shields.io/badge/license-MIT-blue)](#license)
 
-A backend platform for managing secure, role-based online examinations across organizations (schools, universities, and similar institutions). The system provides workflows for exam authoring, scheduling, delivery, attempt tracking, grading, analytics, and auditability.
+Professional backend platform for secure, role-based online examinations. The project is built with NestJS, Prisma, and PostgreSQL and is organized for exam lifecycle management, authentication, analytics, grading, auditability, and future scaling.
 
-## Table of Contents
+## Overview
 
-- [Project Overview](#project-overview)
-- [Key Features](#key-features)
-- [Tech Stack](#tech-stack)
-- [High-Level Architecture](#high-level-architecture)
-- [Screenshots](#screenshots)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Configuration](#configuration)
-  - [Run Locally](#run-locally)
-  - [Build for Production](#build-for-production)
-  - [Deployment Notes](#deployment-notes)
-- [Usage Guide](#usage-guide)
-  - [Admin / Examiner Flow](#admin--examiner-flow)
-  - [Student / Teacher Flow](#student--teacher-flow)
-- [Project Structure](#project-structure)
-- [Contributing](#contributing)
-- [Code of Conduct](#code-of-conduct)
-- [License](#license)
+This repository powers the API layer of an online examination system. It is designed for institutions that need controlled access, reliable exam delivery, and strong operational visibility.
 
-## Project Overview
+### What it handles
 
-The Online Exam System Site is a NestJS-based API service designed for large-scale exam operations. It supports multi-tenant organizations, role-based authorization, exam lifecycle management, proctoring events, grading workflows, and reporting.
-
-## Key Features
-
-- Role-based access control (System Admin, Org Admin, Teacher, Examiner, Student)
-- Authentication with JWT access/refresh token flow
-- Multi-tenant organization model
-- Question bank with versioning and metadata
-- Exam creation, scheduling, and secure attempt lifecycle
-- Auto and manual grading workflows with result release
-- Audit logs and analytics endpoints
-- File upload support (local storage with S3-ready abstractions)
-- Caching and queue abstractions for scale-ready architecture
+- Authentication and authorization with JWT-based access and refresh token flows
+- Role-based access control for system admins, organization admins, teachers, examiners, and students
+- Question bank and versioning workflows
+- Exam scheduling, attempt lifecycle, grading, and result release
+- Audit logging, analytics, notifications, and proctoring support
+- File upload handling with local storage and S3-ready integration points
 
 ## Tech Stack
 
-- **Runtime:** Node.js
-- **Backend Framework:** NestJS (TypeScript)
-- **Database:** PostgreSQL
-- **ORM:** Prisma
-- **Auth/Security:** JWT, guards, permissions, helmet, throttling
-- **Storage:** Local uploads (`/uploads`) with S3 integration points
-- **Containerization (local DB):** Docker Compose
+| Layer | Technology |
+| --- | --- |
+| Runtime | Node.js |
+| Framework | NestJS |
+| Language | TypeScript |
+| Database | PostgreSQL |
+| ORM | Prisma |
+| Security | JWT, guards, validation pipes, Helmet, throttling |
+| Local file storage | `uploads/` |
+| Dev tooling | Docker Compose, ESLint, Prettier, Jest |
 
-## High-Level Architecture
+## Why This Project Is Strong
+
+- Clear separation between common infrastructure and domain modules
+- Modern NestJS security posture with validation, CORS, and throttling configured in the bootstrap
+- Prisma schema already models organizations, users, exams, questions, versions, sessions, attempts, and related audit data
+- Repository structure supports both the current API and a future split into API and web apps
+
+## Folder Structure
 
 ```text
-Clients (Admin/Teacher/Student)
-          |
-          v
-   NestJS API (Controllers + Guards + Services)
-          |
-          +--> Auth / RBAC / Multi-tenant enforcement
-          +--> Exam, Question, Attempt, Grading modules
-          +--> Analytics + Audit logging
-          +--> File handling (Local/S3 abstraction)
-          +--> Cache + Queue abstractions
-          |
-          v
-   Prisma ORM -> PostgreSQL
+.
+├── apps/
+│   ├── api/                 # Reserved for a future dedicated API app split
+│   └── web/                 # Reserved for a future frontend app split
+├── docs/
+│   └── disaster_recovery_plan.md
+├── prisma/
+│   ├── migrations/
+│   ├── schema.prisma
+│   └── seed.ts
+├── scripts/
+│   └── stress-test.ts
+├── src/
+│   ├── common/              # Shared cache, guards, decorators, filters, queue, interceptors
+│   ├── modules/             # Feature modules such as auth, users, exam, grading, analytics
+│   ├── prisma/              # Prisma module and service wiring
+│   ├── app.module.ts        # Root application module
+│   └── main.ts              # Application bootstrap and global configuration
+├── test/                    # End-to-end test setup
+├── uploads/                 # Local uploaded assets served by the API
+├── docker-compose.yml       # Local PostgreSQL container configuration
+├── nest-cli.json            # Nest CLI configuration
+└── README.md
 ```
 
-## Screenshots
-
-> No screenshots are currently included in the repository. Add UI/API screenshots when available.
-
-- `docs/screenshots/admin-dashboard.png` *(placeholder)*
-- `docs/screenshots/exam-session-management.png` *(placeholder)*
-- `docs/screenshots/student-attempt-flow.png` *(placeholder)*
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js (Active LTS recommended)
-- npm (version bundled with your Node.js LTS installation)
-- PostgreSQL 15+ (or Docker)
-
-### Installation
+## Clone and Install
 
 ```bash
 git clone https://github.com/amanuel-alex/Online-Exam-System-site.git
@@ -96,21 +77,25 @@ cd Online-Exam-System-site
 npm install
 ```
 
-### Configuration
+## Configuration
 
-Create a local environment file from the example:
+The repository includes an empty `.env.example` file, so create a local `.env` file and add the values your environment needs.
 
 ```bash
+# macOS / Linux
 cp .env.example .env
+
+# Windows PowerShell
+Copy-Item .env.example .env
 ```
 
-Set the required variables (adjust values per environment):
+Recommended variables:
 
 ```env
-DATABASE_URL=postgresql://postgres:your-password@localhost:5432/examSystem
 PORT=3001
-FRONTEND_URL=http://localhost:3000
 NODE_ENV=development
+FRONTEND_URL=http://localhost:3000
+DATABASE_URL=postgresql://postgres:your-password@localhost:5432/examSystem
 JWT_SECRET=change-me
 JWT_REFRESH_SECRET=change-me
 AUDIT_SECRET=change-me
@@ -123,92 +108,61 @@ AWS_SECRET_ACCESS_KEY=your-secret
 S3_PUBLIC_URL=https://your-bucket.s3.amazonaws.com
 ```
 
-For all secret values (`JWT_SECRET`, `JWT_REFRESH_SECRET`, `AUDIT_SECRET`, `RESULT_SECRET`, `CERTIFICATE_SECRET`), generate strong random values before deployment, for example:
+For production, generate strong secret values and do not reuse development credentials.
 
-```bash
-openssl rand -base64 32
-```
+## Run Locally
 
-### Run Locally
-
-Start PostgreSQL with Docker (optional):
+1. Start PostgreSQL with Docker:
 
 ```bash
 docker compose up -d
 ```
 
-Then run your preferred development start command (according to your local scripts/workflow).
-
-### Build for Production
-
-Use standard Node/Nest production scripts once defined for this repository:
+2. Generate Prisma client and apply the schema:
 
 ```bash
-npm run build
-npm run start:prod
+npx prisma generate
+npx prisma migrate dev
 ```
 
-### Deployment Notes
+3. Start the API in development mode:
 
-- Configure production-grade secrets and database credentials.
-- Set `NODE_ENV=production` and tighten CORS origin values.
-- Use managed PostgreSQL backups and monitoring.
-- See `docs/disaster_recovery_plan.md` for DR/HA strategy guidance.
-
-## Usage Guide
-
-### Admin / Examiner Flow
-
-1. Register/login and obtain an access token.
-2. Create organizations and users, assign roles/permissions.
-3. Build and version question banks.
-4. Create exams, configure rules, and schedule sessions.
-5. Monitor attempts, run grading (auto/manual), and release results.
-6. Review analytics and audit logs.
-
-### Student / Teacher Flow
-
-1. Authenticate and access assigned organization context.
-2. View available exams/sessions.
-3. Start an attempt, save answers, and submit.
-4. Track remaining time and attempt status.
-5. View released results and related notifications.
-
-## Project Structure
-
-```text
-.
-├── docs/                   # Operational and architecture-related docs
-├── prisma/                 # Prisma schema, migrations, seed scripts
-├── scripts/                # Utility scripts (e.g., stress testing)
-├── src/
-│   ├── common/             # Shared guards, decorators, filters, interceptors
-│   ├── modules/            # Domain modules (auth, exam, grading, users, etc.)
-│   ├── prisma/             # Prisma module/service wiring
-│   ├── app.module.ts       # Root module
-│   └── main.ts             # Application bootstrap
-├── test/                   # E2E test scaffolding
-├── uploads/                # Local uploaded assets
-├── docker-compose.yml      # Local PostgreSQL service
-└── README.md
+```bash
+npx nest start --watch
 ```
 
-## Contributing
+The API is exposed under the global prefix `api` and URI versioning is enabled, so routes follow the pattern `/api/v1/...`.
 
-Contributions are welcome. Please:
+## Build for Production
 
-1. Fork the repository and create a focused feature branch.
-2. Keep changes small and well-scoped.
-3. Follow existing coding conventions.
-4. Add or update tests when behavior changes.
-5. Open a pull request with a clear summary and rationale.
+```bash
+npx nest build
+node dist/main.js
+```
 
-## Code of Conduct
+## Recommended Workflow
 
-Please contribute respectfully and constructively. Until a repository-specific policy is added, contributors are expected to follow the [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
+1. Keep PostgreSQL, Prisma, and NestJS versions aligned before making large schema changes.
+2. Run `npx prisma migrate dev` early and often during feature development.
+3. Use `docker compose up -d` for local database consistency across contributors.
+4. Add tests for new domain logic, especially auth, permissions, and exam state transitions.
+5. Treat secrets and database credentials as environment-specific values, not repository defaults.
+
+## Operational Notes
+
+- Security middleware is already configured in the bootstrap with Helmet, CORS, validation, cookie parsing, and rate limiting.
+- Uploaded files are served from `uploads/`, so that directory should be treated as persistent application storage.
+- The repository includes `docs/disaster_recovery_plan.md` for disaster recovery and availability planning.
+
+## Contribution Guide
+
+If you want to contribute:
+
+1. Fork the repository and create a focused branch.
+2. Keep changes scoped to one concern whenever possible.
+3. Update tests or add new ones when behavior changes.
+4. Write clear commit messages and a concise pull request summary.
 
 ## License
 
-**No license specified.**
-
-A `LICENSE` file is not present in this repository. Add an explicit license to define permitted usage and contribution terms.
+The package metadata is set to MIT, but the repository does not currently include a `LICENSE` file. If MIT is the intended license, add the file so the terms are explicit and publishable.
